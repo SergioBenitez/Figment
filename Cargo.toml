@@ -1,0 +1,32 @@
+[package]
+name = "figment"
+version = "0.8.0"
+authors = ["Sergio Benitez <sb@sergio.bz>"]
+edition = "2018"
+description = "A hierarchical configuration library so con-free, it's unreal."
+
+[features]
+env = ["pear", "parse-value"]
+json = ["serde_json"]
+yaml = ["serde_yaml"]
+parse-value = ["pear"]
+test = ["tempfile", "parking_lot"]
+magic = ["serde/derive"]
+# toml = ["toml"]
+
+[dependencies]
+serde = { version = "1.0" }
+uncased = "0.9.3"
+pear = { version = "0.2", optional = true }
+toml = { version = "0.5", optional = true }
+serde_json = { version = "1.0", optional = true }
+serde_yaml = { version = "0.8", optional = true }
+tempfile = { version = "3", optional = true }
+parking_lot = { version = "0.11", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+parking_lot = "0.11"
+
+[build-dependencies]
+version_check = "0.9"
