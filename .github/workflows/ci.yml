@@ -31,8 +31,10 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           override: true
 
+      - name: Check Features
+        run: ./scripts/test.sh --core
+        shell: bash
+
       - name: Run Tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: ./scripts/test.sh
+        shell: bash
