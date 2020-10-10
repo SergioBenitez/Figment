@@ -3,7 +3,13 @@ name = "figment"
 version = "0.8.0"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 edition = "2018"
-description = "A hierarchical configuration library so con-free, it's unreal."
+documentation = "https://docs.rs/figment/0.8"
+description = "A configuration library so con-free, it's unreal."
+repository = "https://github.com/SergioBenitez/Figment"
+readme = "README.md"
+keywords = ["config", "configuration", "toml", "json", "yaml"]
+license = "MIT OR Apache-2.0"
+categories = ["config"]
 
 [features]
 env = ["pear", "parse-value"]
