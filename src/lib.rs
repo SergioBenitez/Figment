@@ -1,4 +1,5 @@
 #![cfg_attr(nightly, feature(doc_cfg))]
+#![doc(html_root_url = "https://docs.rs/figment/0.8.1")]
 
 //! Semi-hierarchical configuration so con-free, it's unreal.
 //!
