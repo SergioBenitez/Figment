@@ -195,7 +195,9 @@ impl<F: Format> Data<F> {
     ///
     ///     // Enable nesting via `nested()`.
     ///     let figment = Figment::from(Toml::file("Config.toml").nested());
-    ///     let config: Config = figment.clone().select("staging").extract()?;
+    ///
+    ///     let figment = figment.select("staging");
+    ///     let config: Config = figment.extract()?;
     ///     assert_eq!(config, Config {
     ///         numbers: vec![1, 2, 3],
     ///         untyped: figment::util::map!["global".into() => 0, "hi".into() => 7],

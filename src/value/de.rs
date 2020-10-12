@@ -8,7 +8,7 @@ use serde::de::{Visitor, SeqAccess, MapAccess};
 
 use crate::Figment;
 use crate::error::{Error, Kind, Result};
-use crate::value::{Value, Num, Empty, Dict, Tag, Id};
+use crate::value::{Value, Num, Empty, Dict, Tag};
 
 pub struct ConfiguredValueDe<'c> {
     pub config: &'c Figment,
@@ -63,7 +63,6 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         #[cfg(feature = "magic")] use crate::value::magic::*;
 
         let (config, tag) = (self.config, self.value.tag());
-        // println!("struct: {:?}", name);
         let result = match name {
             Value::NAME => Value::deserialize_from(self, visitor),
             #[cfg(feature = "magic")]
@@ -291,13 +290,9 @@ impl Value {
         visitor: V
     ) -> Result<V::Value> {
         let mut map = Dict::new();
-        if let Some(id) = de.value.metadata_id() {
-            map.insert(Self::FIELDS[0].into(), id.0.into());
-            map.insert(Self::FIELDS[1].into(), de.value.clone());
-            visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(de.config, v)))
-        } else {
-            de.deserialize_any(visitor)
-        }
+        map.insert(Self::FIELDS[0].into(), de.value.tag().into());
+        map.insert(Self::FIELDS[1].into(), de.value.clone());
+        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(de.config, v)))
     }
 }
 
@@ -375,7 +370,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
         where A: MapAccess<'de>
     {
         let mut dict = Dict::new();
-        let mut id: Option<u64> = None;
+        let mut id: Option<Tag> = None;
         let mut raw_val: Option<RawValue> = None;
         while let Some(key) = map.next_key()? {
             if key == Value::FIELDS[0] {
@@ -389,7 +384,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
         if let Some(mut value) = raw_val {
             if let Some(id) = id {
-                value.0.map_tag(|t| *t = Tag::Id(Id(id)));
+                value.0.map_tag(|t| *t = Tag::from(id));
             }
 
             return Ok(value.0);
@@ -410,27 +405,5 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
     fn visit_unit<E: de::Error>(self) -> result::Result<Self::Value, E> {
         Ok(Empty::Unit.into())
-    }
-}
-
-impl<'de> Deserialize<'de> for Id {
-    fn deserialize<D>(deserializer: D) -> result::Result<Id, D::Error>
-        where D: Deserializer<'de>
-    {
-        struct Visitor;
-
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = Id;
-
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a 64-bit metadata id integer")
-            }
-
-            fn visit_u64<E: de::Error>(self, v: u64) -> result::Result<Self::Value, E> {
-                Ok(Id(v))
-            }
-        }
-
-        deserializer.deserialize_any(Visitor)
     }
 }

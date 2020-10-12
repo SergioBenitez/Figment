@@ -47,7 +47,7 @@ Add the following to your `Cargo.toml`, enabling the desired built-in providers:
 
 ```toml
 [dependencies]
-figment = { version = "0.8", features = ["toml", "env"] }
+figment = { version = "0.9", features = ["toml", "env"] }
 ```
 
 ## License

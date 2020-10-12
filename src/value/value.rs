@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::value::{Tag, Id, ValueSerializer};
+use crate::value::{Tag, ValueSerializer};
 use crate::error::{Error, Actual};
 
 /// An alias to the type of map used in [`Value::Dict`].
@@ -186,28 +186,33 @@ impl Value {
         find(path.split('.'), self)
     }
 
-    /// Returns the [`Id`] of the [`Provider`](crate::Provider) that generated
-    /// `self`, if any.
+    /// Returns the [`Tag`] applied to this value.
     ///
     /// ```
-    /// use figment::{Figment, value::Value, util::map};
-    ///
-    /// // Values not constructed via a figment do not have ids.
-    /// let value = Value::from("hello");
-    /// assert!(value.metadata_id().is_none());
+    /// use figment::{Figment, Profile, value::Value, util::map};
     ///
     /// let map: Value = Figment::from(("key", "value")).extract().unwrap();
     /// let value = map.find_ref("key").expect("value");
     /// assert_eq!(value.as_str(), Some("value"));
-    /// assert!(value.metadata_id().is_some());
+    /// assert!(!value.tag().is_default());
+    /// assert_eq!(value.tag().profile(), Some(Profile::Global));
     ///
     /// let map: Value = Figment::from(("key", map!["key2" => 123])).extract().unwrap();
     /// let value = map.find_ref("key.key2").expect("value");
     /// assert_eq!(value.to_i128(), Some(123));
-    /// assert!(value.metadata_id().is_some());
+    /// assert!(!value.tag().is_default());
+    /// assert_eq!(value.tag().profile(), Some(Profile::Global));
     /// ```
-    pub fn metadata_id(&self) -> Option<Id> {
-        self.tag().id()
+    pub fn tag(&self) -> Tag {
+        match *self {
+            Value::String(tag, ..) => tag,
+            Value::Char(tag, ..) => tag,
+            Value::Bool(tag, ..) => tag,
+            Value::Num(tag, ..) => tag,
+            Value::Dict(tag, ..) => tag,
+            Value::Array(tag, ..) => tag,
+            Value::Empty(tag, ..) => tag,
+        }
     }
 
     conversion_fn!(&Value, String => &str, as_str);
@@ -289,18 +294,6 @@ impl Value {
             Value::Empty(_, e) => e.to_actual(),
             Value::Dict(_, _) => Actual::Map,
             Value::Array(_, _) => Actual::Seq,
-        }
-    }
-
-    pub(crate) fn tag(&self) -> Tag {
-        match *self {
-            Value::String(tag, ..) => tag,
-            Value::Char(tag, ..) => tag,
-            Value::Bool(tag, ..) => tag,
-            Value::Num(tag, ..) => tag,
-            Value::Dict(tag, ..) => tag,
-            Value::Array(tag, ..) => tag,
-            Value::Empty(tag, ..) => tag,
         }
     }
 

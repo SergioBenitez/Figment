@@ -43,7 +43,8 @@ pub struct Serialized<T> {
 }
 
 impl<T> Serialized<T> {
-    /// Constructs an (unkeyed) provider that emits `value` to the `profile`.
+    /// Constructs an (unkeyed) provider that emits `value`, which must
+    /// serialize to a `dict`, to the `profile`.
     ///
     /// ```rust
     /// use serde::Deserialize;
@@ -124,11 +125,51 @@ impl<T> Serialized<T> {
         Self::from(value, Profile::Global).key(key)
     }
 
+    /// Sets the profile to emit the serialized value to.
+    ///
+    /// ```rust
+    /// use figment::{Figment, Jail, providers::Serialized};
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     // This is also `Serialized::defaults(&map)`;
+    ///     let figment = Figment::new()
+    ///         .join(Serialized::default("key", "hey").profile("debug"))
+    ///         .join(Serialized::default("key", "hi"));
+    ///
+    ///     let value: String = figment.extract_inner("key")?;
+    ///     assert_eq!(value, "hi");
+    ///
+    ///     let value: String = figment.select("debug").extract_inner("key")?;
+    ///     assert_eq!(value, "hey");
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
     pub fn profile<P: Into<Profile>>(mut self, profile: P) -> Self {
         self.profile = profile.into();
         self
     }
 
+    /// Sets the key to emit the serialized value to.
+    ///
+    /// ```rust
+    /// use figment::{Figment, Jail, providers::Serialized};
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     // This is also `Serialized::defaults(&map)`;
+    ///     let figment = Figment::new()
+    ///         .join(Serialized::default("key", "hey").key("other"))
+    ///         .join(Serialized::default("key", "hi"));
+    ///
+    ///     let value: String = figment.extract_inner("key")?;
+    ///     assert_eq!(value, "hi");
+    ///
+    ///     let value: String = figment.extract_inner("other")?;
+    ///     assert_eq!(value, "hey");
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
     pub fn key(mut self, key: &str) -> Self {
         self.key = Some(key.into());
         self

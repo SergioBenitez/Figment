@@ -5,8 +5,7 @@ use std::borrow::Cow;
 
 use serde::{ser, de};
 
-use crate::{Figment, Profile, Metadata};
-use crate::value::Tag;
+use crate::{Figment, Profile, Metadata, value::Tag};
 
 /// A simple alias to `Result` with an error type of [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
@@ -86,6 +85,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct Error {
+    /// The tag of the value that errored. We use this to lookup the `metadata`.
     tag: Tag,
     /// The profile that was selected when the error occured, if any.
     pub profile: Option<Profile>,
@@ -150,17 +150,20 @@ impl Error {
     }
 
     pub(crate) fn retagged(mut self, tag: Tag) -> Self {
-        match self.tag {
-            Tag::Default => { self.tag = tag; self }
-            _ => self
+        if self.tag.is_default() {
+            self.tag = tag;
         }
+
+        self
     }
 
     pub(crate) fn resolved(mut self, config: &Figment) -> Self {
         let mut error = Some(&mut self);
         while let Some(e) = error {
-            e.profile = Some(config.profile().clone());
-            e.metadata = e.tag.id().and_then(|i| config.metadata.get(&i)).cloned();
+            e.metadata = config.get_metadata(e.tag).cloned();
+            e.profile = e.tag.profile()
+                .or_else(|| Some(config.profile().clone()));
+
             error = e.prev.as_mut().map(|v| &mut **v);
         }
 
@@ -229,6 +232,7 @@ impl IntoIterator for Error {
 
 /// A type that enumerates all of serde's types, used to indicate that a value
 /// of the given type was received.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Actual {
     Bool(bool),

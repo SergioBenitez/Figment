@@ -201,11 +201,11 @@ impl Default for Metadata {
 ///
 /// The `Source` of a given value can be determined via that value's
 /// [`Metadata.source`](Metadata#structfield.source) retrievable via the value's
-/// metadata [`Id`] (via [`Value::metadata_id()`] or via the magic value
-/// [`Tagged`]) and [`Figment::get_metadata()`].
+/// [`Tag`] (via [`Value::tag()`] or via the magic value [`Tagged`]) and
+/// [`Figment::get_metadata()`].
 ///
-/// [`Id`]: crate::value::Id
-/// [`Value::metadata_id()`]: crate::value::Value::metadata_id()
+/// [`Tag`]: crate::value::Tag
+/// [`Value::tag()`]: crate::value::Value::tag()
 /// [`Tagged`]: crate::value::magic::Tagged
 /// [`Figment::get_metadata()`]: crate::Figment::get_metadata()
 #[non_exhaustive]

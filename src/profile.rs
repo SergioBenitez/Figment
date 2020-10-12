@@ -15,6 +15,49 @@ impl Default for Profile {
     }
 }
 
+/// 2-bit tags used by the top bits of `Tag`.
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum ProfileTag {
+    Default = 0b00,
+    Global = 0b01,
+    Custom = 0b11,
+}
+
+impl From<u8> for ProfileTag {
+    fn from(bits: u8) -> ProfileTag {
+        if bits == ProfileTag::Default as u8 {
+            ProfileTag::Default
+        } else if bits == ProfileTag::Global as u8 {
+            ProfileTag::Global
+        } else {
+            ProfileTag::Custom
+        }
+    }
+}
+
+impl From<ProfileTag> for Option<Profile> {
+    fn from(tag: ProfileTag) -> Self {
+        match tag {
+            ProfileTag::Default => Some(Profile::Default),
+            ProfileTag::Global => Some(Profile::Global),
+            ProfileTag::Custom => None,
+        }
+    }
+}
+
+impl From<&Profile> for ProfileTag {
+    fn from(profile: &Profile) -> Self {
+        if profile == &Profile::Default {
+            ProfileTag::Default
+        } else if profile == &Profile::Global {
+            ProfileTag::Global
+        } else {
+            ProfileTag::Custom
+        }
+    }
+}
+
 impl Profile {
     /// The default profile: `"default"`.
     #[allow(non_upper_case_globals)]

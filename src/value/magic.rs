@@ -6,7 +6,7 @@ use std::path::{PathBuf, Path};
 
 use serde::{Deserialize, Serialize, de};
 
-use crate::{Error, value::{ConfiguredValueDe, MapDe, Id}};
+use crate::{Error, value::{ConfiguredValueDe, MapDe, Tag}};
 
 /// Marker trait for "magic" values. Primarily for use with [`Either`].
 pub trait Magic: for<'de> Deserialize<'de> {
@@ -104,8 +104,7 @@ impl Magic for RelativePathBuf {
         visitor: V
     ) -> Result<V::Value, Error> {
         let config = de.config;
-        let metadata_path = de.value.metadata_id()
-            .and_then(|id| config.get_metadata(id))
+        let metadata_path = config.get_metadata(de.value.tag())
             .and_then(|metadata| metadata.source.as_ref()
                 .and_then(|s| s.file_path())
                 .map(|path| path.display().to_string()));
@@ -316,7 +315,6 @@ impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
 
         // FIXME: propogate the error properly
         let value = de.deserialize_struct(A::NAME, A::FIELDS, ValueVisitor)?;
-        // println!("initial value: {:?}", value);
         match A::deserialize(&value) {
             Ok(value) => Ok(Either::Left(value)),
             Err(a_err) => {
@@ -345,8 +343,7 @@ impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
     }
 }
 
-/// A wrapper around any value of type `T` and the metadata [`Id`] of the
-/// provider that sourced the value.
+/// A wrapper around any value of type `T` and its [`Tag`].
 ///
 /// ```rust
 /// use figment::{Figment, value::magic::Tagged, Jail};
@@ -363,10 +360,10 @@ impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
 ///     let c: Config = figment.extract()?;
 ///     assert_eq!(*c.number, 10);
 ///
-///     let metadata = c.number.metadata_id()
-///         .and_then(|id| figment.get_metadata(id))
-///         .expect("number has metadata id, figment has metadata");
+///     let tag = c.number.tag();
+///     let metadata = figment.get_metadata(tag).expect("number has tag");
 ///
+///     assert!(!tag.is_default());
 ///     assert_eq!(metadata.name, "TOML file");
 ///     Ok(())
 /// });
@@ -374,8 +371,8 @@ impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename = "___figment_tagged_item")]
 pub struct Tagged<T> {
-    #[serde(rename = "___figment_tagged_metadata_id")]
-    metadata_id: Option<Id>,
+    #[serde(rename = "___figment_tagged_tag")]
+    tag: Tag,
     #[serde(rename = "___figment_tagged_value")]
     value: T,
 }
@@ -389,49 +386,38 @@ impl<T: PartialEq> PartialEq for Tagged<T> {
 impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
     const NAME: &'static str = "___figment_tagged_item";
     const FIELDS: &'static [&'static str] = &[
-        "___figment_tagged_metadata_id" , "___figment_tagged_value"
+        "___figment_tagged_tag" , "___figment_tagged_value"
     ];
 
     fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>>(
         de: ConfiguredValueDe<'c>,
         visitor: V
     ) -> Result<V::Value, Error>{
-        println!("from: tagged");
         let mut map = crate::value::Map::new();
-        if let Some(id) = de.value.metadata_id() {
-            map.insert(Self::FIELDS[0].into(), id.0.into());
-        }
-
-        let config = de.config;
+        map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), de.value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
+        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(de.config, v)))
     }
 }
 
 impl<T> Tagged<T> {
-    /// Returns the ID of the metadata of the provider that sourced this value
-    /// if it is known. As long `self` was extracted from a [`Figment`], the
-    /// returned value is expected to be `Some`.
-    ///
-    /// The metadata can be retrieved by calling [`Figment::get_metadata()`] on
-    /// the [`Figment`] `self` was extracted from.
-    ///
-    /// [`Figment`]: crate::Figment
-    /// [`Figment::get_metadata()`]: crate::Figment::get_metadata()
+    /// Returns the tag of the inner value if it is known. As long `self` is a
+    /// leaf and was extracted from a [`Figment`](crate::Figment), the returned
+    /// value is expected to be `Some`.
     ///
     /// # Example
     ///
     /// ```rust
-    /// use figment::{Figment, value::magic::Tagged};
+    /// use figment::{Figment, Profile, value::magic::Tagged};
     ///
     /// let figment = Figment::from(("key", "value"));
     /// let tagged = figment.extract_inner::<Tagged<String>>("key").unwrap();
     ///
-    /// assert!(tagged.metadata_id().is_some());
-    /// assert!(figment.get_metadata(tagged.metadata_id().unwrap()).is_some());
+    /// assert!(!tagged.tag().is_default());
+    /// assert_eq!(tagged.tag().profile(), Some(Profile::Global));
     /// ```
-    pub fn metadata_id(&self) -> Option<Id> {
-        self.metadata_id
+    pub fn tag(&self) -> Tag {
+        self.tag
     }
 
     /// Consumes `self` and returns the inner value.
@@ -463,7 +449,7 @@ impl<T> Deref for Tagged<T> {
 
 impl<T> From<T> for Tagged<T> {
     fn from(value: T) -> Self {
-        Tagged { metadata_id: None, value, }
+        Tagged { tag: Tag::Default, value, }
     }
 }
 
@@ -574,14 +560,14 @@ mod tests {
             .extract_inner::<Tagged<String>>("foo")
             .expect("extraction");
 
-        let first_tag = val.metadata_id().unwrap();
+        let first_tag = val.tag();
         assert_eq!(val.value, "hello");
 
         let val = Figment::from(("bar", "hi"))
             .extract_inner::<Tagged<String>>("bar")
             .expect("extraction");
 
-        let second_tag = val.metadata_id().unwrap();
+        let second_tag = val.tag();
         assert_eq!(val.value, "hi");
         assert!(second_tag != first_tag);
 
@@ -597,11 +583,11 @@ mod tests {
             .extract::<TwoVals>()
             .expect("extraction");
 
-        let tag3 = two.foo.metadata_id().unwrap();
+        let tag3 = two.foo.tag();
         assert_eq!(two.foo.value, "hey");
         assert!(tag3 != second_tag);
 
-        let tag4 = two.bar.metadata_id().unwrap();
+        let tag4 = two.bar.tag();
         assert_eq!(two.bar.value, 10);
         assert!(tag4 != tag3);
 
@@ -611,13 +597,13 @@ mod tests {
             .extract::<Tagged<TwoVals>>()
             .expect("extraction");
 
-        assert_eq!(val.metadata_id(), None);
+        assert!(val.tag().is_default());
 
-        let tag5 = val.value.foo.metadata_id().unwrap();
+        let tag5 = val.value.foo.tag();
         assert_eq!(val.value.foo.value, "hey");
         assert!(tag4 != tag5);
 
-        let tag6 = val.value.bar.metadata_id().unwrap();
+        let tag6 = val.value.bar.tag();
         assert_eq!(val.value.bar.value, 10);
         assert!(tag6 != tag5)
     }

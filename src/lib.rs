@@ -1,5 +1,6 @@
 #![cfg_attr(nightly, feature(doc_cfg))]
-#![doc(html_root_url = "https://docs.rs/figment/0.8.1")]
+#![deny(missing_docs)]
+#![doc(html_root_url = "https://docs.rs/figment/0.9.0")]
 
 //! Semi-hierarchical configuration so con-free, it's unreal.
 //!
@@ -155,13 +156,13 @@
 //! # Metadata
 //!
 //! Figment takes _great_ care to propagate as much information as possible
-//! about configuration sources. All values extracted from a figment are tagged
-//! with an [id](value::Value::metadata_id()) for [`Metadata`]. The tag is
-//! preserved across merges, joins, and errors, which also include the
-//! [`path`](Error::path) of the offending key. Precise tracking allows for rich
-//! error messages as well as ["magic"] values like [`RelativePathBuf`], which
-//! automatically creates a path relative to the configuration file in which it
-//! was declared.
+//! about configuration sources. All values extracted from a figment are
+//! [tagged](crate::value::Tag) with the originating [`Metadata`] and
+//! [`Profile`]. The tag is preserved across merges, joins, and errors, which
+//! also include the [`path`](Error::path) of the offending key. Precise
+//! tracking allows for rich error messages as well as ["magic"] values like
+//! [`RelativePathBuf`], which automatically creates a path relative to the
+//! configuration file in which it was declared.
 //!
 //! A [`Metadata`] consists of:
 //!

@@ -1,9 +1,9 @@
 [package]
 name = "figment"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 edition = "2018"
-documentation = "https://docs.rs/figment/0.8"
+documentation = "https://docs.rs/figment/0.9"
 description = "A configuration library so con-free, it's unreal."
 repository = "https://github.com/SergioBenitez/Figment"
 readme = "README.md"

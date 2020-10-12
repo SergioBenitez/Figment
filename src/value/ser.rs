@@ -1,7 +1,7 @@
 use serde::{ser, Serialize, Serializer};
 
 use crate::error::{Error, Kind};
-use crate::value::{Value, Dict, Num, Empty, Id};
+use crate::value::{Value, Dict, Num, Empty};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -62,12 +62,6 @@ impl Serialize for Empty {
             Empty::None => ser.serialize_none(),
             Empty::Unit => ser.serialize_unit(),
         }
-    }
-}
-
-impl Serialize for Id {
-    fn serialize<S: Serializer>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> {
-        ser.serialize_u64(self.0)
     }
 }
 

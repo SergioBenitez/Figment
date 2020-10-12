@@ -4,7 +4,7 @@ use serde::de::Deserialize;
 
 use crate::{Profile, Provider, Metadata};
 use crate::error::{Kind, Result};
-use crate::value::{Value, Map, Dict, Id, Tag, ConfiguredValueDe};
+use crate::value::{Value, Map, Dict, Tag, ConfiguredValueDe};
 use crate::coalesce::{Coalescible, Order};
 
 /// Combiner of [`Provider`]s for configuration value extraction.
@@ -70,11 +70,11 @@ use crate::coalesce::{Coalescible, Order};
 ///   * [`Figment::find_metadata()`], which returns the metadata for a value at
 ///     a given key path.
 ///   * [`Figment::get_metadata()`], which returns the metadata for a given
-///     metadata [`Id`].
-#[derive(Clone, Debug, PartialEq)]
+///     [`Tag`].
+#[derive(Clone, Debug)]
 pub struct Figment {
     pub(crate) profile: Profile,
-    pub(crate) metadata: Map<Id, Metadata>,
+    pub(crate) metadata: Map<Tag, Metadata>,
     pub(crate) value: Result<Map<Profile, Dict>>,
 }
 
@@ -127,19 +127,19 @@ impl Figment {
             metadata = metadata.source(Location::caller());
         }
 
-        let id = Id::next();
+        let id = Tag::next();
         self.metadata.insert(id, metadata);
 
-        let tag = Tag::Id(id);
+        let tag = Tag::from(id);
         match (provider.data(), self.value) {
             (Ok(_), e@Err(_)) => self.value = e,
             (Err(e), Ok(_)) => self.value = Err(e.retagged(tag)),
             (Err(e), Err(prev)) => self.value = Err(e.retagged(tag).chain(prev)),
             (Ok(mut new), Ok(old)) => {
                 new.iter_mut()
-                    .map(|(_, v)| v.iter_mut())
+                    .map(|(p, map)| std::iter::repeat(p).zip(map.values_mut()))
                     .flatten()
-                    .for_each(|(_, v)| v.map_tag(|t| *t = tag));
+                    .for_each(|(p, v)| v.map_tag(|t| *t = tag.for_profile(p)));
 
                 self.value = Ok(old.coalesce(new, order));
             }
@@ -193,6 +193,7 @@ impl Figment {
         self
     }
 
+    /// Merges the selected profile with the default and global profiles.
     fn merged(&self) -> Result<Value> {
         let mut map = self.value.clone()?;
         let def = map.remove(&Profile::Default).unwrap_or(Dict::new());
@@ -253,11 +254,7 @@ impl Figment {
     /// });
     /// ```
     pub fn extract<'a, T: Deserialize<'a>>(&self) -> Result<T> {
-        // println!("figment = {:?}", self);
         let merged = self.merged().map_err(|e| e.resolved(self))?;
-        // println!("merged = {:?}", self);
-        // FIXME: We need to know the profile, if any, a key came from when
-        // deserializing to tag it appropriately. (for global/default)
         T::deserialize(ConfiguredValueDe::from(self, &merged))
     }
 
@@ -289,9 +286,6 @@ impl Figment {
     pub fn extract_inner<'a, T: Deserialize<'a>>(&self, key: &str) -> Result<T> {
         let merged = self.merged().map_err(|e| e.resolved(self))?;
         let inner = merged.find(key).ok_or(Kind::MissingField(key.to_string().into()))?;
-
-        // FIXME: We need to know the profile, if any, a key came from when
-        // deserializing to tag it appropriately. (for global/default)
         T::deserialize(ConfiguredValueDe::from(self, &inner))
     }
 
@@ -316,7 +310,6 @@ impl Figment {
     ///     }
     /// }
     /// ```
-    //
     // In fact, the order in which they were added globally. Why? Because
     // `BTreeMap` returns values in order of keys, and we generate a new ID,
     // monotonically greater than the previous, each time a new item is
@@ -417,7 +410,7 @@ impl Figment {
     /// });
     /// ```
     pub fn find_metadata(&self, key: &str) -> Option<&Metadata> {
-        self.metadata.get(&self.find_value(key).ok()?.metadata_id()?)
+        self.metadata.get(&self.find_value(key).ok()?.tag())
     }
 
     /// Returns the metadata with the given `id` if this figment contains a
@@ -439,19 +432,17 @@ impl Figment {
     ///         .join(Json::file("Config.json"));
     ///
     ///     let name = figment.find_value("name").unwrap();
-    ///     let id = name.metadata_id().unwrap();
-    ///     let metadata = figment.get_metadata(id).unwrap();
+    ///     let metadata = figment.get_metadata(name.tag()).unwrap();
     ///     assert!(metadata.name.starts_with("TOML"));
     ///
     ///     let author = figment.find_value("author").unwrap();
-    ///     let id = author.metadata_id().unwrap();
-    ///     let metadata = figment.get_metadata(id).unwrap();
+    ///     let metadata = figment.get_metadata(author.tag()).unwrap();
     ///     assert!(metadata.name.starts_with("JSON"));
     ///
     ///     Ok(())
     /// });
     /// ```
-    pub fn get_metadata(&self, id: Id) -> Option<&Metadata> {
+    pub fn get_metadata(&self, id: Tag) -> Option<&Metadata> {
         self.metadata.get(&id)
     }
 }
@@ -465,7 +456,7 @@ impl Provider for Figment {
         Some(self.profile.clone())
     }
 
-    fn __metadata_map(&self) -> Option<Map<Id, Metadata>> {
+    fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> {
         Some(self.metadata.clone())
     }
 }
@@ -474,4 +465,11 @@ impl Default for Figment {
     fn default() -> Self {
         Figment::new()
     }
+}
+
+#[test]
+#[cfg(test)]
+fn is_send_sync() {
+    fn check_for_send_sync<T: Send + Sync>() {}
+    check_for_send_sync::<Figment>();
 }
