@@ -74,7 +74,6 @@ if [ "$1" = "--core" ]; then
     json
     yaml
     test
-    magic
   )
 
   echo ":: Building and testing core [no features]..."

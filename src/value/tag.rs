@@ -75,8 +75,8 @@ impl Tag {
         self.0 == Tag::Default.0
     }
 
-    /// Returns the profile `self` refers to if it either `Profile::Default` or
-    /// `Profile::Custom`; otherwise returns `None`.
+    /// Returns the profile `self` refers to if it is either `Profile::Default`
+    /// or `Profile::Custom`; otherwise returns `None`.
     ///
     /// # Example
     ///

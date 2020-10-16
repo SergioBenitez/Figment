@@ -60,14 +60,12 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         _fields: &'static [&'static str],
         visitor: V
     ) -> Result<V::Value> {
-        #[cfg(feature = "magic")] use crate::value::magic::*;
+        use crate::value::magic::*;
 
         let (config, tag) = (self.config, self.value.tag());
         let result = match name {
             Value::NAME => Value::deserialize_from(self, visitor),
-            #[cfg(feature = "magic")]
             RelativePathBuf::NAME => RelativePathBuf::deserialize_from(self, visitor),
-            #[cfg(feature = "magic")]
             Tagged::<()>::NAME => Tagged::<()>::deserialize_from(self, visitor),
             // SelectedProfile::NAME => SelectedProfile::deserialize_from(self, visitor),
             _ => self.deserialize_any(visitor)

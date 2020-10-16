@@ -17,7 +17,6 @@ json = ["serde_json"]
 yaml = ["serde_yaml"]
 parse-value = ["pear"]
 test = ["tempfile", "parking_lot"]
-magic = ["serde/derive"]
 # toml = ["toml"]
 
 [dependencies]
@@ -33,6 +32,7 @@ parking_lot = { version = "0.11", optional = true }
 [dev-dependencies]
 tempfile = "3"
 parking_lot = "0.11"
+serde = { version = "1.0", features = ["derive"] }
 
 [build-dependencies]
 version_check = "0.9"

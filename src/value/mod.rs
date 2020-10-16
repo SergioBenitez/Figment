@@ -7,8 +7,6 @@ mod parse;
 mod de;
 mod tag;
 
-#[cfg(feature = "magic")]
-#[cfg_attr(nightly, doc(cfg(feature = "magic")))]
 pub mod magic;
 
 pub(crate) use {self::ser::*, self::de::*};

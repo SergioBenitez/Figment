@@ -413,7 +413,7 @@ impl Figment {
         self.metadata.get(&self.find_value(key).ok()?.tag())
     }
 
-    /// Returns the metadata with the given `id` if this figment contains a
+    /// Returns the metadata with the given `tag` if this figment contains a
     /// value with said metadata.
     ///
     /// # Example
@@ -442,8 +442,8 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn get_metadata(&self, id: Tag) -> Option<&Metadata> {
-        self.metadata.get(&id)
+    pub fn get_metadata(&self, tag: Tag) -> Option<&Metadata> {
+        self.metadata.get(&tag)
     }
 }
 

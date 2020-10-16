@@ -285,7 +285,6 @@
 //! | feature | gated namespace     | description                             |
 //! |---------|---------------------|-----------------------------------------|
 //! | `test`  | [`Jail`]            | Semi-sandboxed environment for testing. |
-//! | `magic` | [`value::magic`]    | "Magic" deserializable values.          |
 //! | `env`   | [`providers::Env`]  | Environment variable [`Provider`].      |
 //! | `toml`  | [`providers::Toml`] | TOML file/string [`Provider`].          |
 //! | `json`  | [`providers::Json`] | JSON file/string [`Provider`].          |

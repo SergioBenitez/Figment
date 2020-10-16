@@ -61,11 +61,11 @@ impl From<&Profile> for ProfileTag {
 impl Profile {
     /// The default profile: `"default"`.
     #[allow(non_upper_case_globals)]
-    pub const Default: Profile = Profile(Uncased::from_borrowed("default"));
+    pub const Default: Profile = Profile::const_new("default");
 
     /// The global profile: `"global"`.
     #[allow(non_upper_case_globals)]
-    pub const Global: Profile = Profile(Uncased::from_borrowed("global"));
+    pub const Global: Profile = Profile::const_new("global");
 
     /// Constructs a profile with the name `name`.
     ///
@@ -80,6 +80,22 @@ impl Profile {
     /// ```
     pub fn new(name: &str) -> Profile {
         Profile(name.to_string().into())
+    }
+
+    /// A `const` to construct a profile with the name `name`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use figment::Profile;
+    ///
+    /// const STAGING: Profile = Profile::const_new("staging");
+    ///
+    /// assert_eq!(STAGING, "staging");
+    /// assert_eq!(STAGING, "STAGING");
+    /// ```
+    pub const fn const_new(name: &'static str) -> Profile {
+        Profile(Uncased::from_borrowed(name))
     }
 
     /// Constructs a profile from the value of the environment variable with
@@ -245,6 +261,18 @@ impl PartialEq<Profile> for str {
 impl PartialEq<Profile> for &str {
     fn eq(&self, other: &Profile) -> bool {
         self == other.as_str()
+    }
+}
+
+impl PartialEq<Profile> for &Profile {
+    fn eq(&self, other: &Profile) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<&Profile> for Profile {
+    fn eq(&self, other: &&Profile) -> bool {
+        self.as_str() == other.as_str()
     }
 }
 
