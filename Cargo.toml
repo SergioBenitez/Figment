@@ -18,6 +18,8 @@ yaml = ["serde_yaml"]
 parse-value = ["pear"]
 test = ["tempfile", "parking_lot"]
 # toml = ["toml"]
+# keep this feature for backwards 0.9.x compatibility, even if it does nothing
+magic = []
 
 [dependencies]
 serde = { version = "1.0" }
