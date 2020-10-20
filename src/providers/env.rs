@@ -295,6 +295,22 @@ impl Env {
         self
     }
 
+    /// Sets the profile config data will be emitted to to `global`.
+    ///
+    /// ```rust
+    /// use figment::{Profile, providers::Env};
+    ///
+    /// let env = Env::raw();
+    /// assert_eq!(env.profile, Profile::Default);
+    ///
+    /// let env = env.global();
+    /// assert_eq!(env.profile, Profile::Global);
+    /// ```
+    pub fn global(mut self) -> Self {
+        self.profile = Profile::Global;
+        self
+    }
+
     /// A convenience method to retrieve the value for an environment variable
     /// with name `name`. Retrieval is case-insensitive.
     ///
