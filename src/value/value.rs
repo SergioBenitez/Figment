@@ -416,6 +416,72 @@ pub enum Num {
 }
 
 impl Num {
+    /// Converts `self` into a `u32` if `self` is an unsigned variant with `<=
+    /// 32` bits.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Num;
+    ///
+    /// let num: Num = 123u8.into();
+    /// assert_eq!(num.to_u32(), Some(123));
+    ///
+    /// let num: Num = (u32::max_value() as u64 + 1).into();
+    /// assert_eq!(num.to_u32(), None);
+    /// ```
+    pub fn to_u32(self) -> Option<u32> {
+        Some(match self {
+            Num::U8(v) => v as u32,
+            Num::U16(v) => v as u32,
+            Num::U32(v) => v as u32,
+            _ => return None,
+        })
+    }
+
+    /// Converts `self` into a `u128` if `self` is an unsigned variant.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Num;
+    ///
+    /// let num: Num = 123u8.into();
+    /// assert_eq!(num.to_u128(), Some(123));
+    /// ```
+    pub fn to_u128(self) -> Option<u128> {
+        Some(match self {
+            Num::U8(v) => v as u128,
+            Num::U16(v) => v as u128,
+            Num::U32(v) => v as u128,
+            Num::U128(v) => v as u128,
+            Num::USize(v) => v as u128,
+            _ => return None,
+        })
+    }
+
+    /// Converts `self` into a `u128` if `self` is an unsigned `Value::Num`
+    /// variant.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Num;
+    ///
+    /// let num: Num = 123i8.into();
+    /// assert_eq!(num.to_i128(), Some(123));
+    /// ```
+    pub fn to_i128(self) -> Option<i128> {
+        Some(match self {
+            Num::I8(v) => v as i128,
+            Num::I16(v) => v as i128,
+            Num::I32(v) => v as i128,
+            Num::I128(v) => v as i128,
+            Num::ISize(v) => v as i128,
+            _ => return None,
+        })
+    }
+
     /// Converts `self` into an [`Actual`]. All unsigned variants return
     /// [`Actual::Unsigned`], signed variants [`Actual::Signed`], and float
     /// variants [`Actual::Float`]. Values exceeding the bit-width of the target

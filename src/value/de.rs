@@ -74,6 +74,33 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         result.map_err(|e| e.retagged(tag).resolved(config))
     }
 
+
+    fn deserialize_enum<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        _: &'static [&'static str],
+        v: V,
+    ) -> Result<V::Value> {
+        use serde::de::value::MapAccessDeserializer;
+
+        let (config, tag) = (self.config, self.value.tag());
+        let result = match self.value {
+            Value::String(_, s) => v.visit_enum((&**s).into_deserializer()),
+            Value::Dict(_, ref map) => {
+                let maker = |v| Self::from(self.config, v);
+                let map_access = MapDe::new(map, maker);
+                v.visit_enum(MapAccessDeserializer::new(map_access))
+            }
+            Value::Num(_, n) if n.to_u32().is_some() => {
+                let tag = n.to_u32().unwrap();
+                v.visit_enum(tag.into_deserializer())
+            }
+            _ => self.deserialize_any(v)
+        };
+
+        result.map_err(|e| e.retagged(tag).resolved(&config))
+    }
+
     fn is_human_readable(&self) -> bool {
         let val = self.readable.get();
         self.readable.set(!val);
@@ -82,7 +109,7 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
 
     serde::forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
-        string seq enum bytes byte_buf map unit newtype_struct
+        string seq bytes byte_buf map unit newtype_struct
         ignored_any unit_struct tuple_struct tuple identifier
     }
 }
@@ -197,9 +224,33 @@ impl<'de> Deserializer<'de> for &Value {
         visitor.visit_some(self)
     }
 
+    fn deserialize_enum<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        _: &'static [&'static str],
+        v: V,
+    ) -> Result<V::Value> {
+        use serde::de::value::MapAccessDeserializer;
+
+        let result = match self {
+            Value::String(_, s) => v.visit_enum((&**s).into_deserializer()),
+            Value::Dict(_, ref map) => {
+                let map_access = MapDe::new(map, |v| v);
+                v.visit_enum(MapAccessDeserializer::new(map_access))
+            }
+            Value::Num(_, n) if n.to_u32().is_some() => {
+                let tag = n.to_u32().unwrap();
+                v.visit_enum(tag.into_deserializer())
+            }
+            _ => self.deserialize_any(v)
+        };
+
+        result.map_err(|e: Error| e.retagged(self.tag()))
+    }
+
     serde::forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
-        string seq enum bytes byte_buf map unit struct newtype_struct
+        string seq bytes byte_buf map unit struct newtype_struct
         ignored_any unit_struct tuple_struct tuple identifier
     }
 }
