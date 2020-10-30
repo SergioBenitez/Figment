@@ -22,7 +22,7 @@ pub type Dict = Map<String, Value>;
 /// let v = Value::from("hello");
 /// assert_eq!(v.as_str(), Some("hello"));
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     /// A string.
     String(Tag, String),
@@ -320,6 +320,21 @@ impl Value {
             Value::Dict(_, v) => v.iter_mut().for_each(|(_, v)| v.map_tag(f)),
             Value::Array(_, v) => v.iter_mut().for_each(|v| v.map_tag(f)),
             _ => { /* already handled */ }
+        }
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::String(_, v1), Value::String(_, v2)) => v1 == v2,
+            (Value::Char(_, v1), Value::Char(_, v2)) => v1 == v2,
+            (Value::Bool(_, v1), Value::Bool(_, v2)) => v1 == v2,
+            (Value::Num(_, v1), Value::Num(_, v2)) => v1 == v2,
+            (Value::Empty(_, v1), Value::Empty(_, v2)) => v1 == v2,
+            (Value::Dict(_, v1), Value::Dict(_, v2)) => v1 == v2,
+            (Value::Array(_, v1), Value::Array(_, v2)) => v1 == v2,
+            _ => false,
         }
     }
 }

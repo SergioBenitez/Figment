@@ -1,8 +1,10 @@
 use std::fmt;
 
 use crate::{Profile, Provider, Metadata};
+use crate::coalesce::Coalescible;
 use crate::value::{Map, Dict};
 use crate::error::Error;
+use crate::util::nest;
 
 use uncased::{Uncased, UncasedStr};
 
@@ -14,7 +16,27 @@ crate::util::cloneable_fn_trait!(
 ///
 /// All key-lookups and comparisons are case insensitive, facilitated by the
 /// [`UncasedStr`] and [`Uncased`] types. Environment variables names are
-/// converted to lowercase before being emitted as keys in the provided data.
+/// converted to lowercase before being emitted as [key paths] in the provided
+/// data. Environment variable values can contain structured data, parsed as a
+/// [`Value`], with syntax resembling TOML:
+///
+///   * [`Bool`]: `true`, `false` (e.g, `APP_VAR=true`)
+///   * [`Num::F64`]: any float containing `.`: (e.g, `APP_VAR=1.2`, `APP_VAR=-0.002`)
+///   * [`Num::USize`]: any unsigned integer (e.g, `APP_VAR=10`)
+///   * [`Num::Isize`]: any negative integer (e.g, `APP_VAR=-10`)
+///   * [`Array`]: delimited by `[]` (e.g, `APP_VAR=[true, 1.0, -1]`)
+///   * [`Dict`]: in the form `{key=value}` (e.g, `APP_VAR={key="value",num=10}`)
+///   * [`String`]: delimited by `""` (e.g, `APP_VAR="hi"`)
+///   * [`String`]: anything else (e.g, `APP_VAR=hi`, `APP_VAR=[hi`)
+///
+/// [key paths]: crate::Figment#extraction
+/// [`Value`]: crate::value::Value
+/// [`Bool`]: crate::value::Value::Bool
+/// [`Num::F64`]: crate::value::Num::F64
+/// [`Num::USize`]: crate::value::Num::USize
+/// [`Num::ISize`]: crate::value::Num::ISize
+/// [`Array`]: crate::value::Value::Array
+/// [`String`]: crate::value::Value::String
 ///
 /// # Provider Details
 ///
@@ -189,6 +211,64 @@ impl Env {
         Env::new(move |key| filter_map(key).map(|key| mapper(&key).into_owned()))
     }
 
+    /// Splits each environment variable key at `pattern`, creating nested
+    /// dictionaries for each split. Specifically, nested dictionaries are
+    /// created for components delimited by `pattern` in the environment
+    /// variable string (3 in `A_B_C` if `pattern` is `_`), each dictionary
+    /// mapping to its parent.
+    ///
+    /// This is equivalent to: `self.map(|key| key.replace(pattern, "."))`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use serde::Deserialize;
+    /// use figment::{Figment, Jail, util::map, value::Dict, providers::Env};
+    ///
+    /// #[derive(Debug, PartialEq, Deserialize)]
+    /// struct Foo {
+    ///     key: usize,
+    /// }
+    ///
+    /// #[derive(Debug, PartialEq, Deserialize)]
+    /// struct Config {
+    ///     foo: Foo,
+    ///     map: Dict,
+    /// }
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     // Without splitting: using structured data.
+    ///     jail.set_env("APP_FOO", "{key=10}");
+    ///     jail.set_env("APP_MAP", "{one=1,two=2.0}");
+    ///
+    ///     let config: Config = Figment::from(Env::prefixed("APP_")).extract()?;
+    ///     assert_eq!(config, Config {
+    ///         foo: Foo { key: 10 },
+    ///         map: map!["one".into() => 1u8.into(), "two".into() => 2.0.into()],
+    ///     });
+    ///
+    ///     // With splitting.
+    ///     jail.set_env("APP_FOO_KEY", 20);
+    ///     jail.set_env("APP_MAP_ONE", "1.0");
+    ///     jail.set_env("APP_MAP_TWO", "dos");
+    ///
+    ///     let config: Config = Figment::new()
+    ///         .merge(Env::prefixed("APP_").split("_"))
+    ///         .extract()?;
+    ///
+    ///     assert_eq!(config, Config {
+    ///         foo: Foo { key: 20 },
+    ///         map: map!["one".into() => 1.0.into(), "two".into() => "dos".into()],
+    ///     });
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn split<P: Into<String>>(self, pattern: P) -> Self {
+        let pattern = pattern.into();
+        self.map(move |key| key.as_str().replace(&pattern, ".").into())
+    }
+
     /// Filters out all environment variable keys contained in `keys`.
     ///
     /// ```rust
@@ -222,14 +302,18 @@ impl Env {
     /// Jail::expect_with(|jail| {
     ///     jail.set_env("FOO_FOO", 1);
     ///     jail.set_env("FOO_BAR", 2);
-    ///     jail.set_env("FOO_BAZ", 3);
-    ///     jail.set_env("FOO_BAM", 4);
+    ///     jail.set_env("FOO_BAZ_BOB", 3);
+    ///     jail.set_env("FOO_BAM_BOP", 4);
     ///
-    ///     let env = Env::prefixed("FOO_").only(&["bar", "baz", "zoo"]);
+    ///     let env = Env::prefixed("FOO_").only(&["bar", "baz_bob", "zoo"]);
     ///     assert_eq!(env.iter().count(), 2);
     ///
-    ///     jail.set_env("FOO_ZOO", 4);
+    ///     jail.set_env("FOO_ZOO", 5);
     ///     assert_eq!(env.iter().count(), 3);
+    ///
+    ///     let env = Env::prefixed("FOO_").split("_");
+    ///     assert_eq!(env.clone().only(&["bar", "baz.bob"]).iter().count(), 2);
+    ///     assert_eq!(env.clone().only(&["bar", "bam_bop"]).iter().count(), 1);
     ///
     ///     Ok(())
     /// });
@@ -241,7 +325,7 @@ impl Env {
 
     /// Returns an iterator over all of the environment variable `(key, value)`
     /// pairs that will be considered by `self`. The order is not specified.
-    /// Keys are always lower-case.
+    /// Keys are always lower-case. Empty keys are not emitted.
     ///
     /// ```rust
     /// use figment::{Jail, providers::Env};
@@ -272,6 +356,7 @@ impl Env {
     /// ```
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uncased, String)> + 'a {
         std::env::vars_os().filter_map(move |(k, v)| {
+            if k.is_empty() { return None; }
             let key = Uncased::from(k.to_string_lossy());
             let mapped_key = (self.filter_map)(&key)?;
             let lower = mapped_key.as_str().to_ascii_lowercase();
@@ -372,9 +457,14 @@ impl Provider for Env {
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
-        let dict: Dict = self.iter()
-            .map(|(k, v)| (k.into_string(), v.parse().expect("infallible")))
-            .collect();
+        let mut dict = Dict::new();
+        for (k, v) in self.iter() {
+            let nested_dict = nest(k.as_str(), v.parse().expect("infallible"))
+                .into_dict()
+                .expect("key is non-empty: must have dict");
+
+            dict = dict.merge(nested_dict);
+        }
 
         Ok(self.profile.collect(dict))
     }

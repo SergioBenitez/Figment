@@ -239,6 +239,49 @@ pub mod vec_tuple_map {
     }
 }
 
+use crate::value::{Value, Dict};
+
+/// Given a key path `key` of the form `a.b.c`, creates nested dictionaries for
+/// for every path component delimited by `.` in the path string (3 in `a.b.c`),
+/// each dictionary mapping to its parent, and `value` mapping to the leaf.
+///
+/// If `key` is empty, simply returns `value`. Otherwise, `Value` will be a
+/// dictionary with the nested mappings.
+///
+/// # Example
+///
+/// ```rust
+/// use figment::{util::nest, value::Value};
+///
+/// let leaf = Value::from("I'm a leaf!");
+///
+/// let dict = nest("tea", leaf.clone());
+/// assert_eq!(dict.find_ref("tea").unwrap(), &leaf);
+///
+/// let dict = nest("tea.leaf", leaf.clone());
+/// let tea = dict.find_ref("tea").unwrap();
+/// let found_leaf = tea.find_ref("leaf").unwrap();
+/// assert_eq!(found_leaf, &leaf);
+/// assert_eq!(dict.find_ref("tea.leaf").unwrap(), &leaf);
+///
+/// let just_leaf = nest("", leaf.clone());
+/// assert_eq!(just_leaf, leaf);
+/// ```
+pub fn nest(key: &str, value: Value) -> Value {
+    fn value_from(mut keys: std::str::Split<'_, char>, value: Value) -> Value {
+        match keys.next() {
+            Some(k) if !k.is_empty() => {
+                let mut dict = Dict::new();
+                dict.insert(k.into(), value_from(keys, value));
+                dict.into()
+            }
+            Some(_) | None => value
+        }
+    }
+
+    value_from(key.split('.'), value)
+}
+
 #[doc(hidden)]
 #[macro_export]
 /// This is a macro.

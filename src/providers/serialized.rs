@@ -176,17 +176,6 @@ impl<T> Serialized<T> {
     }
 }
 
-fn value_from(mut keys: std::str::Split<'_, char>, value: Value) -> Value {
-    match keys.next() {
-        Some(k) if !k.is_empty() => {
-            let mut dict = Dict::new();
-            dict.insert(k.into(), value_from(keys, value));
-            dict.into()
-        }
-        Some(_) | None => value
-    }
-}
-
 impl<T: Serialize> Provider for Serialized<T> {
     fn metadata(&self) -> Metadata {
         Metadata::from(std::any::type_name::<T>(), self.loc)
@@ -196,7 +185,7 @@ impl<T: Serialize> Provider for Serialized<T> {
         let value = Value::serialize(&self.value)?;
         let error = InvalidType(value.to_actual(), "map".into());
         let dict = match &self.key {
-            Some(key) => value_from(key.split('.'), value).into_dict().ok_or(error)?,
+            Some(key) => crate::util::nest(key, value).into_dict().ok_or(error)?,
             None => value.into_dict().ok_or(error)?,
         };
 
