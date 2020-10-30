@@ -1,6 +1,6 @@
 #![cfg_attr(nightly, feature(doc_cfg))]
 #![deny(missing_docs)]
-#![doc(html_root_url = "https://docs.rs/figment/0.9.3")]
+#![doc(html_root_url = "https://docs.rs/figment/0.9.4")]
 
 //! Semi-hierarchical configuration so con-free, it's unreal.
 //!
