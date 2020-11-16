@@ -236,8 +236,8 @@ impl IntoIterator for Error {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Actual {
     Bool(bool),
-    Unsigned(u64),
-    Signed(i64),
+    Unsigned(u128),
+    Signed(i128),
     Float(f64),
     Char(char),
     Str(String),
@@ -284,8 +284,8 @@ impl From<de::Unexpected<'_>> for Actual {
     fn from(value: de::Unexpected<'_>) -> Actual {
         match value {
             de::Unexpected::Bool(v) => Actual::Bool(v),
-            de::Unexpected::Unsigned(v) => Actual::Unsigned(v),
-            de::Unexpected::Signed(v) => Actual::Signed(v),
+            de::Unexpected::Unsigned(v) => Actual::Unsigned(v as u128),
+            de::Unexpected::Signed(v) => Actual::Signed(v as i128),
             de::Unexpected::Float(v) => Actual::Float(v),
             de::Unexpected::Char(v) => Actual::Char(v),
             de::Unexpected::Str(v) => Actual::Str(v.into()),

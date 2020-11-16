@@ -398,7 +398,7 @@ impl_from_for_value! {
 }
 
 /// A signed or unsigned numeric value.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum Num {
     /// An 8-bit unsigned integer.
     U8(u8),
@@ -518,21 +518,27 @@ impl Num {
     /// ```
     pub fn to_actual(&self) -> Actual {
         match *self {
-            Num::U8(v) => Actual::Unsigned(v as u64),
-            Num::U16(v) => Actual::Unsigned(v as u64),
-            Num::U32(v) => Actual::Unsigned(v as u64),
-            Num::U64(v) => Actual::Unsigned(v as u64),
-            Num::U128(v) => Actual::Unsigned(v as u64),
-            Num::USize(v) => Actual::Unsigned(v as u64),
-            Num::I8(v) => Actual::Signed(v as i64),
-            Num::I16(v) => Actual::Signed(v as i64),
-            Num::I32(v) => Actual::Signed(v as i64),
-            Num::I64(v) => Actual::Signed(v as i64),
-            Num::I128(v) => Actual::Signed(v as i64),
-            Num::ISize(v) => Actual::Signed(v as i64),
+            Num::U8(v) => Actual::Unsigned(v as u128),
+            Num::U16(v) => Actual::Unsigned(v as u128),
+            Num::U32(v) => Actual::Unsigned(v as u128),
+            Num::U64(v) => Actual::Unsigned(v as u128),
+            Num::U128(v) => Actual::Unsigned(v as u128),
+            Num::USize(v) => Actual::Unsigned(v as u128),
+            Num::I8(v) => Actual::Signed(v as i128),
+            Num::I16(v) => Actual::Signed(v as i128),
+            Num::I32(v) => Actual::Signed(v as i128),
+            Num::I64(v) => Actual::Signed(v as i128),
+            Num::I128(v) => Actual::Signed(v as i128),
+            Num::ISize(v) => Actual::Signed(v as i128),
             Num::F32(v) => Actual::Float(v as f64),
             Num::F64(v) => Actual::Float(v as f64),
         }
+    }
+}
+
+impl PartialEq for Num {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_actual() == other.to_actual()
     }
 }
 
