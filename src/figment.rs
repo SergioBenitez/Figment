@@ -336,6 +336,45 @@ impl Figment {
         &self.profile
     }
 
+    /// Returns an iterator over profiles with valid configurations in this
+    /// figment. **Note:** this may not include the selected profile if the
+    /// selected profile has no configured values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::{Figment, providers::Serialized};
+    ///
+    /// let figment = Figment::new();
+    /// let profiles = figment.profiles().collect::<Vec<_>>();
+    /// assert_eq!(profiles.len(), 0);
+    ///
+    /// let figment = Figment::new()
+    ///     .join(Serialized::default("key", "hi"))
+    ///     .join(Serialized::default("key", "hey").profile("debug"));
+    ///
+    /// let mut profiles = figment.profiles().collect::<Vec<_>>();
+    /// profiles.sort();
+    /// assert_eq!(profiles, &["debug", "default"]);
+    ///
+    /// let figment = Figment::new()
+    ///     .join(Serialized::default("key", "hi").profile("release"))
+    ///     .join(Serialized::default("key", "hi").profile("testing"))
+    ///     .join(Serialized::default("key", "hey").profile("staging"))
+    ///     .select("debug");
+    ///
+    /// let mut profiles = figment.profiles().collect::<Vec<_>>();
+    /// profiles.sort();
+    /// assert_eq!(profiles, &["release", "staging", "testing"]);
+    /// ```
+    pub fn profiles(&self) -> impl Iterator<Item = &Profile> {
+        self.value.as_ref()
+            .ok()
+            .map(|v| v.keys())
+            .into_iter()
+            .flatten()
+    }
+
     /// Finds the value at `key` path in the combined value. See
     /// [`Value::find()`] for details on the syntax for `key`.
     ///
