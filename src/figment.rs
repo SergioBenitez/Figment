@@ -26,7 +26,7 @@ use crate::coalesce::{Coalescible, Order};
 /// while a _joined_ value is discarded if a value with the same key exists:
 ///
 /// ```rust
-/// use figment::{Figment};
+/// use figment::Figment;
 ///
 /// let figment = Figment::from(("key", "original"));
 ///
