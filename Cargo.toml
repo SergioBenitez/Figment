@@ -1,9 +1,9 @@
 [package]
 name = "figment"
-version = "0.9.4"
+version = "0.10.0"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 edition = "2018"
-documentation = "https://docs.rs/figment/0.9"
+documentation = "https://docs.rs/figment/0.10"
 description = "A configuration library so con-free, it's unreal."
 repository = "https://github.com/SergioBenitez/Figment"
 readme = "README.md"
@@ -18,8 +18,6 @@ yaml = ["serde_yaml"]
 parse-value = ["pear"]
 test = ["tempfile", "parking_lot"]
 # toml = ["toml"]
-# keep this feature for backwards 0.9.x compatibility, even if it does nothing
-magic = []
 
 [dependencies]
 serde = { version = "1.0" }
