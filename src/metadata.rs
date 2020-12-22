@@ -15,10 +15,14 @@ use crate::Profile;
 ///   * A name for the source, e.g. "TOML File".
 ///   * The [`Source`] itself, if it is known.
 ///   * A default or custom [interpolater](#interpolation).
+///   * A source [`Location`] where a value's provider was added to the
+///   containing figment, if it is known.
 ///
 /// This information is used to produce insightful error messages as well as to
 /// generate values like [`RelativePathBuf`] that know about their configuration
 /// source.
+///
+/// [`Location`]: std::panic::Location
 ///
 /// ## Errors
 ///
@@ -70,6 +74,9 @@ pub struct Metadata {
     pub name: Cow<'static, str>,
     /// The source of the configuration value, if it is known.
     pub source: Option<Source>,
+    /// The source location where this value's provider was added to the
+    /// containing figment, if it is known.
+    pub provide_location: Option<&'static Location<'static>>,
     interpolater: Box<dyn Interpolator>,
 }
 
@@ -192,6 +199,7 @@ impl Default for Metadata {
         Self {
             name: "Default".into(),
             source: None,
+            provide_location: None,
             interpolater: Box::new(default_interpolater),
         }
     }

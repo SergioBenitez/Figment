@@ -61,16 +61,19 @@ use crate::coalesce::{Coalescible, Order};
 ///
 /// ## Metadata
 ///
-/// Every value collected by a `Figment` is accompanied by metadata. If the
-/// metadata has no `source`, the `merge` or `join` `Location` is added as a
-/// source. `Metadata` can be retrieved in one of several ways:
+/// Every value collected by a `Figment` is accompanied by the metadata produced
+/// by the value's provider. Additionally, [`Metadata::provide_source`] is set
+/// by `from`, `merge` and `join` to the caller's location. `Metadata` can be
+/// retrieved in one of several ways:
 ///
 ///   * [`Figment::metadata()`], which returns an iterator over all of the
 ///     metadata for all values.
 ///   * [`Figment::find_metadata()`], which returns the metadata for a value at
 ///     a given key path.
 ///   * [`Figment::get_metadata()`], which returns the metadata for a given
-///     [`Tag`].
+///     [`Tag`], itself retrieved via [`Tagged`] or [`Value::tag()`].
+///
+/// [`Tagged`]: crate::value::magic::Tagged
 #[derive(Clone, Debug)]
 pub struct Figment {
     pub(crate) profile: Profile,
@@ -108,6 +111,7 @@ impl Figment {
     /// # assert_eq!(figment.profile(), "default");
     /// assert_eq!(figment.metadata().count(), 1);
     /// ```
+    #[track_caller]
     pub fn from<T: Provider>(provider: T) -> Self {
         Figment::new().merge(provider)
     }
@@ -123,9 +127,7 @@ impl Figment {
         }
 
         let mut metadata = provider.metadata();
-        if metadata.source.is_none() {
-            metadata = metadata.source(Location::caller());
-        }
+        metadata.provide_location = Some(Location::caller());
 
         let id = Tag::next();
         self.metadata.insert(id, metadata);
@@ -433,17 +435,18 @@ impl Figment {
     ///
     /// figment::Jail::expect_with(|jail| {
     ///     jail.create_file("Config.toml", r#" name = "test" "#)?;
-    ///     jail.create_file("Config.json", r#" { "author": "Bob" } "#)?;
+    ///     jail.set_env("CONF_AUTHOR", "Bob");
     ///
     ///     let figment = Figment::new()
     ///         .merge(Toml::file("Config.toml"))
-    ///         .join(Json::file("Config.json"));
+    ///         .join(Env::prefixed("CONF_").only(&["author"]));
     ///
     ///     let name_md = figment.find_metadata("name").unwrap();
     ///     assert!(name_md.name.starts_with("TOML"));
     ///
     ///     let author_md = figment.find_metadata("author").unwrap();
-    ///     assert!(author_md.name.starts_with("JSON"));
+    ///     assert!(author_md.name.contains("CONF_"));
+    ///     assert!(author_md.name.contains("environment"));
     ///
     ///     Ok(())
     /// });

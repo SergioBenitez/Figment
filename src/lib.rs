@@ -169,7 +169,9 @@
 //!   * The name of the configuration source.
 //!   * An ["interpolater"](Metadata::interpolate()) that takes a path to a key
 //!     and converts it into a provider-native key.
-//!   * a [`Source`] specifying where the value was sourced from.
+//!   * A [`Source`] specifying where the value was sourced from.
+//!   * A code source [`Location`] where the value's provider was added to a
+//!   [`Figment`].
 //!
 //! Along with the information in an [`Error`], this means figment can produce
 //! rich error values and messages:
@@ -181,6 +183,7 @@
 //!
 //! [`RelativePathBuf`]: value::magic::RelativePathBuf
 //! ["magic"]: value::magic
+//! [`Location`]: std::panic::Location
 //!
 //! # Extracting and Profiles
 //!
