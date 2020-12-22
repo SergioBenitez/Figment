@@ -81,6 +81,17 @@ impl Env {
         Env { filter_map: Box::new(f), profile: Profile::Default, prefix: None }
     }
 
+    fn chain<F: Clone + 'static>(self, f: F) -> Self
+        where F: for<'a> Fn(Option<Uncased<'a>>) -> Option<Uncased<'a>>
+    {
+        let filter_map = self.filter_map;
+        Env {
+            filter_map: Box::new(move |key| f(filter_map(key))),
+            profile: self.profile,
+            prefix: self.prefix
+        }
+    }
+
     /// Constructs and `Env` provider that does not filter or map any
     /// environment variables.
     ///
@@ -169,11 +180,7 @@ impl Env {
     pub fn filter<F: Clone + 'static>(self, filter: F) -> Self
         where F: Fn(&UncasedStr) -> bool
     {
-        let filter_map = self.filter_map;
-        Env::new(move |key| match filter_map(key) {
-            Some(key) if filter(&key) => Some(key),
-            _ => None
-        })
+        self.chain(move |prev| prev.filter(|v| filter(&v)))
     }
 
     /// Applys an additional mapping to the keys of environment variables being
@@ -207,8 +214,7 @@ impl Env {
     pub fn map<F: Clone + 'static>(self, mapper: F) -> Self
         where F: Fn(&UncasedStr) -> Uncased
     {
-        let filter_map = self.filter_map;
-        Env::new(move |key| filter_map(key).map(|key| mapper(&key).into_owned()))
+        self.chain(move |prev| prev.map(|v| mapper(&v).into_owned()))
     }
 
     /// Splits each environment variable key at `pattern`, creating nested
