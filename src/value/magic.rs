@@ -461,14 +461,60 @@ impl<T> From<T> for Tagged<T> {
 mod _serde {
     use super::*;
 
+    pub mod export {
+        // These are re-reexports used by serde's codegen.
+        pub use std::clone::Clone;
+        pub use std::convert::{From, Into};
+        pub use std::default::Default;
+        pub use std::fmt::{self, Formatter};
+        pub use std::marker::PhantomData;
+        pub use std::option::Option::{self, None, Some};
+        pub use std::result::Result::{self, Err, Ok};
+
+        pub fn missing_field<'de, V, E>(field: &'static str) -> Result<V, E>
+            where V: serde::de::Deserialize<'de>,
+                  E: serde::de::Error,
+        {
+            struct MissingFieldDeserializer<E>(&'static str, PhantomData<E>);
+
+            impl<'de, E> serde::de::Deserializer<'de> for MissingFieldDeserializer<E>
+                where E: serde::de::Error
+            {
+                    type Error = E;
+
+                    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, E>
+                        where V: serde::de::Visitor<'de>,
+                    {
+                        Err(serde::de::Error::missing_field(self.0))
+                    }
+
+                    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, E>
+                        where V: serde::de::Visitor<'de>,
+                    {
+                        visitor.visit_none()
+                    }
+
+                    serde::forward_to_deserialize_any! {
+                        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
+                        string bytes byte_buf unit unit_struct newtype_struct seq tuple
+                        tuple_struct map struct enum identifier ignored_any
+                    }
+                }
+
+            let deserializer = MissingFieldDeserializer(field, PhantomData);
+            serde::de::Deserialize::deserialize(deserializer)
+        }
+    }
+
     #[doc(hidden)]
     #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
     const _: () = {
         #[allow(rust_2018_idioms, clippy::useless_attribute)]
         extern crate serde as _serde;
+
         #[automatically_derived]
         impl<'de> _serde::Deserialize<'de> for RelativePathBuf {
-            fn deserialize<__D>(__deserializer: __D) -> _serde::export::Result<Self, __D::Error>
+            fn deserialize<__D>(__deserializer: __D) -> export::Result<Self, __D::Error>
             where
                 __D: _serde::Deserializer<'de>,
             {
@@ -483,21 +529,21 @@ mod _serde {
                     type Value = __Field;
                     fn expecting(
                         &self,
-                        __formatter: &mut _serde::export::Formatter,
-                    ) -> _serde::export::fmt::Result {
-                        _serde::export::Formatter::write_str(__formatter, "field identifier")
+                        __formatter: &mut export::Formatter,
+                    ) -> export::fmt::Result {
+                        export::Formatter::write_str(__formatter, "field identifier")
                     }
                     fn visit_u64<__E>(
                         self,
                         __value: u64,
-                    ) -> _serde::export::Result<Self::Value, __E>
+                    ) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
-                            0u64 => _serde::export::Ok(__Field::__field0),
-                            1u64 => _serde::export::Ok(__Field::__field1),
-                            _ => _serde::export::Err(_serde::de::Error::invalid_value(
+                            0u64 => export::Ok(__Field::__field0),
+                            1u64 => export::Ok(__Field::__field1),
+                            _ => export::Err(_serde::de::Error::invalid_value(
                                 _serde::de::Unexpected::Unsigned(__value),
                                 &"field index 0 <= i < 2",
                             )),
@@ -506,33 +552,33 @@ mod _serde {
                     fn visit_str<__E>(
                         self,
                         __value: &str,
-                    ) -> _serde::export::Result<Self::Value, __E>
+                    ) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
                             "___figment_relative_metadata_path" => {
-                                _serde::export::Ok(__Field::__field0)
+                                export::Ok(__Field::__field0)
                             }
-                            "___figment_relative_path" => _serde::export::Ok(__Field::__field1),
-                            _ => _serde::export::Ok(__Field::__ignore),
+                            "___figment_relative_path" => export::Ok(__Field::__field1),
+                            _ => export::Ok(__Field::__ignore),
                         }
                     }
                     fn visit_bytes<__E>(
                         self,
                         __value: &[u8],
-                    ) -> _serde::export::Result<Self::Value, __E>
+                    ) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
                             b"___figment_relative_metadata_path" => {
-                                _serde::export::Ok(__Field::__field0)
+                                export::Ok(__Field::__field0)
                             }
                             b"___figment_relative_path" => {
-                                _serde::export::Ok(__Field::__field1)
+                                export::Ok(__Field::__field1)
                             }
-                            _ => _serde::export::Ok(__Field::__ignore),
+                            _ => export::Ok(__Field::__ignore),
                         }
                     }
                 }
@@ -540,7 +586,7 @@ mod _serde {
                     #[inline]
                     fn deserialize<__D>(
                         __deserializer: __D,
-                    ) -> _serde::export::Result<Self, __D::Error>
+                    ) -> export::Result<Self, __D::Error>
                     where
                         __D: _serde::Deserializer<'de>,
                     {
@@ -551,16 +597,16 @@ mod _serde {
                     }
                 }
                 struct __Visitor<'de> {
-                    marker: _serde::export::PhantomData<RelativePathBuf>,
-                    lifetime: _serde::export::PhantomData<&'de ()>,
+                    marker: export::PhantomData<RelativePathBuf>,
+                    lifetime: export::PhantomData<&'de ()>,
                 }
                 impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
                     type Value = RelativePathBuf;
                     fn expecting(
                         &self,
-                        __formatter: &mut _serde::export::Formatter,
-                    ) -> _serde::export::fmt::Result {
-                        _serde::export::Formatter::write_str(
+                        __formatter: &mut export::Formatter,
+                    ) -> export::fmt::Result {
+                        export::Formatter::write_str(
                             __formatter,
                             "struct RelativePathBuf",
                         )
@@ -569,7 +615,7 @@ mod _serde {
                     fn visit_seq<__A>(
                         self,
                         mut __seq: __A,
-                    ) -> _serde::export::Result<Self::Value, __A::Error>
+                    ) -> export::Result<Self::Value, __A::Error>
                     where
                         __A: _serde::de::SeqAccess<'de>,
                     {
@@ -577,14 +623,14 @@ mod _serde {
                             Option<PathBuf>,
                         >(&mut __seq)
                         {
-                            _serde::export::Ok(__val) => __val,
-                            _serde::export::Err(__err) => {
-                                return _serde::export::Err(__err);
+                            export::Ok(__val) => __val,
+                            export::Err(__err) => {
+                                return export::Err(__err);
                             }
                         } {
-                            _serde::export::Some(__value) => __value,
-                            _serde::export::None => {
-                                return _serde::export::Err(_serde::de::Error::invalid_length(
+                            export::Some(__value) => __value,
+                            export::None => {
+                                return export::Err(_serde::de::Error::invalid_length(
                                     0usize,
                                     &"struct RelativePathBuf with 2 elements",
                                 ));
@@ -593,20 +639,20 @@ mod _serde {
                         let __field1 = match match _serde::de::SeqAccess::next_element::<PathBuf>(
                             &mut __seq,
                         ) {
-                            _serde::export::Ok(__val) => __val,
-                            _serde::export::Err(__err) => {
-                                return _serde::export::Err(__err);
+                            export::Ok(__val) => __val,
+                            export::Err(__err) => {
+                                return export::Err(__err);
                             }
                         } {
-                            _serde::export::Some(__value) => __value,
-                            _serde::export::None => {
-                                return _serde::export::Err(_serde::de::Error::invalid_length(
+                            export::Some(__value) => __value,
+                            export::None => {
+                                return export::Err(_serde::de::Error::invalid_length(
                                     1usize,
                                     &"struct RelativePathBuf with 2 elements",
                                 ));
                             }
                         };
-                        _serde::export::Ok(RelativePathBuf {
+                        export::Ok(RelativePathBuf {
                             metadata_path: __field0,
                             path: __field1,
                         })
@@ -615,57 +661,57 @@ mod _serde {
                     fn visit_map<__A>(
                         self,
                         mut __map: __A,
-                    ) -> _serde::export::Result<Self::Value, __A::Error>
+                    ) -> export::Result<Self::Value, __A::Error>
                     where
                         __A: _serde::de::MapAccess<'de>,
                     {
-                        let mut __field0: _serde::export::Option<Option<PathBuf>> =
-                            _serde::export::None;
-                        let mut __field1: _serde::export::Option<PathBuf> =
-                            _serde::export::None;
-                        while let _serde::export::Some(__key) =
+                        let mut __field0: export::Option<Option<PathBuf>> =
+                            export::None;
+                        let mut __field1: export::Option<PathBuf> =
+                            export::None;
+                        while let export::Some(__key) =
                             match _serde::de::MapAccess::next_key::<__Field>(&mut __map) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             }
                         {
                             match __key {
                                 __Field::__field0 => {
-                                    if _serde::export::Option::is_some(&__field0) {
-                                        return _serde::export::Err(
+                                    if export::Option::is_some(&__field0) {
+                                        return export::Err(
                                             <__A::Error as _serde::de::Error>::duplicate_field(
                                                 "___figment_relative_metadata_path",
                                             ),
                                         );
                                     }
-                                    __field0 = _serde::export::Some(
+                                    __field0 = export::Some(
                                         match _serde::de::MapAccess::next_value::<Option<PathBuf>>(
                                             &mut __map,
                                         ) {
-                                            _serde::export::Ok(__val) => __val,
-                                            _serde::export::Err(__err) => {
-                                                return _serde::export::Err(__err);
+                                            export::Ok(__val) => __val,
+                                            export::Err(__err) => {
+                                                return export::Err(__err);
                                             }
                                         },
                                     );
                                 }
                                 __Field::__field1 => {
-                                    if _serde::export::Option::is_some(&__field1) {
-                                        return _serde::export::Err(
+                                    if export::Option::is_some(&__field1) {
+                                        return export::Err(
                                             <__A::Error as _serde::de::Error>::duplicate_field(
                                                 "___figment_relative_path",
                                             ),
                                         );
                                     }
-                                    __field1 = _serde::export::Some(
+                                    __field1 = export::Some(
                                         match _serde::de::MapAccess::next_value::<PathBuf>(
                                             &mut __map,
                                         ) {
-                                            _serde::export::Ok(__val) => __val,
-                                            _serde::export::Err(__err) => {
-                                                return _serde::export::Err(__err);
+                                            export::Ok(__val) => __val,
+                                            export::Err(__err) => {
+                                                return export::Err(__err);
                                             }
                                         },
                                     );
@@ -676,37 +722,37 @@ mod _serde {
                                     >(
                                         &mut __map
                                     ) {
-                                        _serde::export::Ok(__val) => __val,
-                                        _serde::export::Err(__err) => {
-                                            return _serde::export::Err(__err);
+                                        export::Ok(__val) => __val,
+                                        export::Err(__err) => {
+                                            return export::Err(__err);
                                         }
                                     };
                                 }
                             }
                         }
                         let __field0 = match __field0 {
-                            _serde::export::Some(__field0) => __field0,
-                            _serde::export::None => match _serde::private::de::missing_field(
+                            export::Some(__field0) => __field0,
+                            export::None => match export::missing_field(
                                 "___figment_relative_metadata_path",
                             ) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             },
                         };
                         let __field1 = match __field1 {
-                            _serde::export::Some(__field1) => __field1,
-                            _serde::export::None => match _serde::private::de::missing_field(
+                            export::Some(__field1) => __field1,
+                            export::None => match export::missing_field(
                                 "___figment_relative_path",
                             ) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             },
                         };
-                        _serde::export::Ok(RelativePathBuf {
+                        export::Ok(RelativePathBuf {
                             metadata_path: __field0,
                             path: __field1,
                         })
@@ -721,8 +767,8 @@ mod _serde {
                     "___figment_relative_path_buf",
                     FIELDS,
                     __Visitor {
-                        marker: _serde::export::PhantomData::<RelativePathBuf>,
-                        lifetime: _serde::export::PhantomData,
+                        marker: export::PhantomData::<RelativePathBuf>,
+                        lifetime: export::PhantomData,
                     },
                 )
             }
@@ -739,7 +785,7 @@ mod _serde {
             fn serialize<__S>(
                 &self,
                 __serializer: __S,
-            ) -> _serde::export::Result<__S::Ok, __S::Error>
+            ) -> export::Result<__S::Ok, __S::Error>
             where
                 __S: _serde::Serializer,
             {
@@ -748,9 +794,9 @@ mod _serde {
                     "___figment_relative_path_buf",
                     false as usize + 1 + 1,
                 ) {
-                    _serde::export::Ok(__val) => __val,
-                    _serde::export::Err(__err) => {
-                        return _serde::export::Err(__err);
+                    export::Ok(__val) => __val,
+                    export::Err(__err) => {
+                        return export::Err(__err);
                     }
                 };
                 match _serde::ser::SerializeStruct::serialize_field(
@@ -758,9 +804,9 @@ mod _serde {
                     "___figment_relative_metadata_path",
                     &self.metadata_path,
                 ) {
-                    _serde::export::Ok(__val) => __val,
-                    _serde::export::Err(__err) => {
-                        return _serde::export::Err(__err);
+                    export::Ok(__val) => __val,
+                    export::Err(__err) => {
+                        return export::Err(__err);
                     }
                 };
                 match _serde::ser::SerializeStruct::serialize_field(
@@ -768,9 +814,9 @@ mod _serde {
                     "___figment_relative_path",
                     &self.path,
                 ) {
-                    _serde::export::Ok(__val) => __val,
-                    _serde::export::Err(__err) => {
-                        return _serde::export::Err(__err);
+                    export::Ok(__val) => __val,
+                    export::Err(__err) => {
+                        return export::Err(__err);
                     }
                 };
                 _serde::ser::SerializeStruct::end(__serde_state)
@@ -792,7 +838,7 @@ mod _serde {
             fn serialize<__S>(
                 &self,
                 __serializer: __S,
-            ) -> _serde::export::Result<__S::Ok, __S::Error>
+            ) -> export::Result<__S::Ok, __S::Error>
             where
                 __S: _serde::Serializer,
             {
@@ -830,7 +876,7 @@ mod _serde {
         where
             T: _serde::Deserialize<'de>,
         {
-            fn deserialize<__D>(__deserializer: __D) -> _serde::export::Result<Self, __D::Error>
+            fn deserialize<__D>(__deserializer: __D) -> export::Result<Self, __D::Error>
             where
                 __D: _serde::Deserializer<'de>,
             {
@@ -845,21 +891,21 @@ mod _serde {
                     type Value = __Field;
                     fn expecting(
                         &self,
-                        __formatter: &mut _serde::export::Formatter,
-                    ) -> _serde::export::fmt::Result {
-                        _serde::export::Formatter::write_str(__formatter, "field identifier")
+                        __formatter: &mut export::Formatter,
+                    ) -> export::fmt::Result {
+                        export::Formatter::write_str(__formatter, "field identifier")
                     }
                     fn visit_u64<__E>(
                         self,
                         __value: u64,
-                    ) -> _serde::export::Result<Self::Value, __E>
+                    ) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
-                            0u64 => _serde::export::Ok(__Field::__field0),
-                            1u64 => _serde::export::Ok(__Field::__field1),
-                            _ => _serde::export::Err(_serde::de::Error::invalid_value(
+                            0u64 => export::Ok(__Field::__field0),
+                            1u64 => export::Ok(__Field::__field1),
+                            _ => export::Err(_serde::de::Error::invalid_value(
                                 _serde::de::Unexpected::Unsigned(__value),
                                 &"field index 0 <= i < 2",
                             )),
@@ -868,27 +914,27 @@ mod _serde {
                     fn visit_str<__E>(
                         self,
                         __value: &str,
-                    ) -> _serde::export::Result<Self::Value, __E>
+                    ) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
-                            "___figment_tagged_tag" => _serde::export::Ok(__Field::__field0),
-                            "___figment_tagged_value" => _serde::export::Ok(__Field::__field1),
-                            _ => _serde::export::Ok(__Field::__ignore),
+                            "___figment_tagged_tag" => export::Ok(__Field::__field0),
+                            "___figment_tagged_value" => export::Ok(__Field::__field1),
+                            _ => export::Ok(__Field::__ignore),
                         }
                     }
                     fn visit_bytes<__E>(
                         self,
                         __value: &[u8],
-                    ) -> _serde::export::Result<Self::Value, __E>
+                    ) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
-                            b"___figment_tagged_tag" => _serde::export::Ok(__Field::__field0),
-                            b"___figment_tagged_value" => _serde::export::Ok(__Field::__field1),
-                            _ => _serde::export::Ok(__Field::__ignore),
+                            b"___figment_tagged_tag" => export::Ok(__Field::__field0),
+                            b"___figment_tagged_value" => export::Ok(__Field::__field1),
+                            _ => export::Ok(__Field::__ignore),
                         }
                     }
                 }
@@ -896,7 +942,7 @@ mod _serde {
                     #[inline]
                     fn deserialize<__D>(
                         __deserializer: __D,
-                    ) -> _serde::export::Result<Self, __D::Error>
+                    ) -> export::Result<Self, __D::Error>
                     where
                         __D: _serde::Deserializer<'de>,
                     {
@@ -910,8 +956,8 @@ mod _serde {
                 where
                     T: _serde::Deserialize<'de>,
                 {
-                    marker: _serde::export::PhantomData<Tagged<T>>,
-                    lifetime: _serde::export::PhantomData<&'de ()>,
+                    marker: export::PhantomData<Tagged<T>>,
+                    lifetime: export::PhantomData<&'de ()>,
                 }
                 impl<'de, T> _serde::de::Visitor<'de> for __Visitor<'de, T>
                 where
@@ -920,29 +966,29 @@ mod _serde {
                     type Value = Tagged<T>;
                     fn expecting(
                         &self,
-                        __formatter: &mut _serde::export::Formatter,
-                    ) -> _serde::export::fmt::Result {
-                        _serde::export::Formatter::write_str(__formatter, "struct Tagged")
+                        __formatter: &mut export::Formatter,
+                    ) -> export::fmt::Result {
+                        export::Formatter::write_str(__formatter, "struct Tagged")
                     }
                     #[inline]
                     fn visit_seq<__A>(
                         self,
                         mut __seq: __A,
-                    ) -> _serde::export::Result<Self::Value, __A::Error>
+                    ) -> export::Result<Self::Value, __A::Error>
                     where
                         __A: _serde::de::SeqAccess<'de>,
                     {
                         let __field0 = match match _serde::de::SeqAccess::next_element::<Tag>(
                             &mut __seq,
                         ) {
-                            _serde::export::Ok(__val) => __val,
-                            _serde::export::Err(__err) => {
-                                return _serde::export::Err(__err);
+                            export::Ok(__val) => __val,
+                            export::Err(__err) => {
+                                return export::Err(__err);
                             }
                         } {
-                            _serde::export::Some(__value) => __value,
-                            _serde::export::None => {
-                                return _serde::export::Err(_serde::de::Error::invalid_length(
+                            export::Some(__value) => __value,
+                            export::None => {
+                                return export::Err(_serde::de::Error::invalid_length(
                                     0usize,
                                     &"struct Tagged with 2 elements",
                                 ));
@@ -950,14 +996,14 @@ mod _serde {
                         };
                         let __field1 =
                             match match _serde::de::SeqAccess::next_element::<T>(&mut __seq) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             } {
-                                _serde::export::Some(__value) => __value,
-                                _serde::export::None => {
-                                    return _serde::export::Err(
+                                export::Some(__value) => __value,
+                                export::None => {
+                                    return export::Err(
                                         _serde::de::Error::invalid_length(
                                             1usize,
                                             &"struct Tagged with 2 elements",
@@ -965,7 +1011,7 @@ mod _serde {
                                     );
                                 }
                             };
-                        _serde::export::Ok(Tagged {
+                        export::Ok(Tagged {
                             tag: __field0,
                             value: __field1,
                         })
@@ -974,54 +1020,54 @@ mod _serde {
                     fn visit_map<__A>(
                         self,
                         mut __map: __A,
-                    ) -> _serde::export::Result<Self::Value, __A::Error>
+                    ) -> export::Result<Self::Value, __A::Error>
                     where
                         __A: _serde::de::MapAccess<'de>,
                     {
-                        let mut __field0: _serde::export::Option<Tag> = _serde::export::None;
-                        let mut __field1: _serde::export::Option<T> = _serde::export::None;
-                        while let _serde::export::Some(__key) =
+                        let mut __field0: export::Option<Tag> = export::None;
+                        let mut __field1: export::Option<T> = export::None;
+                        while let export::Some(__key) =
                             match _serde::de::MapAccess::next_key::<__Field>(&mut __map) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             }
                         {
                             match __key {
                                 __Field::__field0 => {
-                                    if _serde::export::Option::is_some(&__field0) {
-                                        return _serde::export::Err(
+                                    if export::Option::is_some(&__field0) {
+                                        return export::Err(
                                             <__A::Error as _serde::de::Error>::duplicate_field(
                                                 "___figment_tagged_tag",
                                             ),
                                         );
                                     }
-                                    __field0 = _serde::export::Some(
+                                    __field0 = export::Some(
                                         match _serde::de::MapAccess::next_value::<Tag>(
                                             &mut __map,
                                         ) {
-                                            _serde::export::Ok(__val) => __val,
-                                            _serde::export::Err(__err) => {
-                                                return _serde::export::Err(__err);
+                                            export::Ok(__val) => __val,
+                                            export::Err(__err) => {
+                                                return export::Err(__err);
                                             }
                                         },
                                     );
                                 }
                                 __Field::__field1 => {
-                                    if _serde::export::Option::is_some(&__field1) {
-                                        return _serde::export::Err(
+                                    if export::Option::is_some(&__field1) {
+                                        return export::Err(
                                             <__A::Error as _serde::de::Error>::duplicate_field(
                                                 "___figment_tagged_value",
                                             ),
                                         );
                                     }
-                                    __field1 = _serde::export::Some(
+                                    __field1 = export::Some(
                                         match _serde::de::MapAccess::next_value::<T>(&mut __map)
                                         {
-                                            _serde::export::Ok(__val) => __val,
-                                            _serde::export::Err(__err) => {
-                                                return _serde::export::Err(__err);
+                                            export::Ok(__val) => __val,
+                                            export::Err(__err) => {
+                                                return export::Err(__err);
                                             }
                                         },
                                     );
@@ -1032,37 +1078,37 @@ mod _serde {
                                     >(
                                         &mut __map
                                     ) {
-                                        _serde::export::Ok(__val) => __val,
-                                        _serde::export::Err(__err) => {
-                                            return _serde::export::Err(__err);
+                                        export::Ok(__val) => __val,
+                                        export::Err(__err) => {
+                                            return export::Err(__err);
                                         }
                                     };
                                 }
                             }
                         }
                         let __field0 = match __field0 {
-                            _serde::export::Some(__field0) => __field0,
-                            _serde::export::None => match _serde::private::de::missing_field(
+                            export::Some(__field0) => __field0,
+                            export::None => match export::missing_field(
                                 "___figment_tagged_tag",
                             ) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             },
                         };
                         let __field1 = match __field1 {
-                            _serde::export::Some(__field1) => __field1,
-                            _serde::export::None => match _serde::private::de::missing_field(
+                            export::Some(__field1) => __field1,
+                            export::None => match export::missing_field(
                                 "___figment_tagged_value",
                             ) {
-                                _serde::export::Ok(__val) => __val,
-                                _serde::export::Err(__err) => {
-                                    return _serde::export::Err(__err);
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
                                 }
                             },
                         };
-                        _serde::export::Ok(Tagged {
+                        export::Ok(Tagged {
                             tag: __field0,
                             value: __field1,
                         })
@@ -1075,8 +1121,8 @@ mod _serde {
                     "___figment_tagged_item",
                     FIELDS,
                     __Visitor {
-                        marker: _serde::export::PhantomData::<Tagged<T>>,
-                        lifetime: _serde::export::PhantomData,
+                        marker: export::PhantomData::<Tagged<T>>,
+                        lifetime: export::PhantomData,
                     },
                 )
             }
@@ -1096,7 +1142,7 @@ mod _serde {
             fn serialize<__S>(
                 &self,
                 __serializer: __S,
-            ) -> _serde::export::Result<__S::Ok, __S::Error>
+            ) -> export::Result<__S::Ok, __S::Error>
             where
                 __S: _serde::Serializer,
             {
@@ -1105,9 +1151,9 @@ mod _serde {
                     "___figment_tagged_item",
                     false as usize + 1 + 1,
                 ) {
-                    _serde::export::Ok(__val) => __val,
-                    _serde::export::Err(__err) => {
-                        return _serde::export::Err(__err);
+                    export::Ok(__val) => __val,
+                    export::Err(__err) => {
+                        return export::Err(__err);
                     }
                 };
                 match _serde::ser::SerializeStruct::serialize_field(
@@ -1115,9 +1161,9 @@ mod _serde {
                     "___figment_tagged_tag",
                     &self.tag,
                 ) {
-                    _serde::export::Ok(__val) => __val,
-                    _serde::export::Err(__err) => {
-                        return _serde::export::Err(__err);
+                    export::Ok(__val) => __val,
+                    export::Err(__err) => {
+                        return export::Err(__err);
                     }
                 };
                 match _serde::ser::SerializeStruct::serialize_field(
@@ -1125,9 +1171,9 @@ mod _serde {
                     "___figment_tagged_value",
                     &self.value,
                 ) {
-                    _serde::export::Ok(__val) => __val,
-                    _serde::export::Err(__err) => {
-                        return _serde::export::Err(__err);
+                    export::Ok(__val) => __val,
+                    export::Err(__err) => {
+                        return export::Err(__err);
                     }
                 };
                 _serde::ser::SerializeStruct::end(__serde_state)
