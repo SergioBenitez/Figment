@@ -35,22 +35,32 @@ pub trait Magic: for<'de> Deserialize<'de> {
 /// ```rust
 /// use std::path::Path;
 ///
-/// use serde::Deserialize;
+/// use serde::{Deserialize, Serialize};
 /// use figment::{Figment, value::magic::RelativePathBuf, Jail};
-/// use figment::providers::{Env, Format, Toml};
+/// use figment::providers::{Env, Format, Toml, Serialized};
 ///
-/// #[derive(Debug, PartialEq, Deserialize)]
+/// #[derive(Debug, PartialEq, Deserialize, Serialize)]
 /// struct Config {
 ///     path: RelativePathBuf,
 /// }
 ///
 /// Jail::expect_with(|jail| {
+///     // Note that `jail.directory()` is some non-empty path:
+///     assert_ne!(jail.directory(), Path::new("/"));
+///
 ///     // When a path is declared in a file and deserialized as
 ///     // `RelativePathBuf`, `relative()` will be relative to the file.
 ///     jail.create_file("Config.toml", r#"path = "a/b/c.html""#)?;
 ///     let c: Config = Figment::from(Toml::file("Config.toml")).extract()?;
 ///     assert_eq!(c.path.original(), Path::new("a/b/c.html"));
 ///     assert_eq!(c.path.relative(), jail.directory().join("a/b/c.html"));
+///     assert_ne!(c.path.relative(), Path::new("a/b/c.html"));
+///
+///     // Round-tripping a `RelativePathBuf` preserves path-relativity.
+///     let c: Config = Figment::from(Serialized::defaults(&c)).extract()?;
+///     assert_eq!(c.path.original(), Path::new("a/b/c.html"));
+///     assert_eq!(c.path.relative(), jail.directory().join("a/b/c.html"));
+///     assert_ne!(c.path.relative(), Path::new("a/b/c.html"));
 ///
 ///     // If a path is declared elsewhere, the "relative" path is the original.
 ///     jail.set_env("PATH", "a/b/c.html");
@@ -104,7 +114,16 @@ impl Magic for RelativePathBuf {
         de: ConfiguredValueDe<'c>,
         visitor: V
     ) -> Result<V::Value, Error> {
+        // If we have this struct with a non-empty metadata_path, use it.
         let config = de.config;
+        if let Some(d) = de.value.as_dict() {
+            if let Some(mpv) = d.get(Self::FIELDS[0]) {
+                if mpv.to_empty().is_none() {
+                    return visitor.visit_map(MapDe::new(d, |v| ConfiguredValueDe::from(config, v)));
+                }
+            }
+        }
+
         let metadata_path = config.get_metadata(de.value.tag())
             .and_then(|metadata| metadata.source.as_ref()
                 .and_then(|s| s.file_path())
@@ -115,7 +134,9 @@ impl Magic for RelativePathBuf {
             map.insert(Self::FIELDS[0].into(), path.into());
         }
 
-        map.insert(Self::FIELDS[1].into(), de.value.clone());
+        // If we have this struct with no metadata_path, still use the value.
+        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or_else(|| &de.value);
+        map.insert(Self::FIELDS[1].into(), value.clone());
         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
     }
 }
@@ -272,7 +293,7 @@ impl RelativePathBuf {
 /// use serde::{Serialize, Deserialize};
 /// use figment::{Figment, value::magic::{Either, RelativePathBuf, Tagged}};
 ///
-/// #[derive(Debug, PartialEq, Deserialize)]
+/// #[derive(Debug, PartialEq, Deserialize, Serialize)]
 /// struct Config {
 ///     int_or_str: Either<Tagged<usize>, String>,
 ///     path_or_bytes: Either<RelativePathBuf, Vec<u8>>,
@@ -297,6 +318,22 @@ impl RelativePathBuf {
 /// let config: Config = figment("boo!", &[4, 5, 6]).extract().unwrap();
 /// assert_eq!(config.int_or_str, Either::Right("boo!".into()));
 /// assert_eq!(config.path_or_bytes, Either::Right(vec![4, 5, 6].into()));
+///
+/// let config: Config = Figment::from(figment::providers::Serialized::defaults(Config {
+///     int_or_str: Either::Left(10.into()),
+///     path_or_bytes: Either::Left("a/b/c".into()),
+/// })).extract().unwrap();
+///
+/// assert_eq!(config.int_or_str, Either::Left(10.into()));
+/// assert_eq!(config.path_or_bytes, Either::Left("a/b/c".into()));
+///
+/// let config: Config = Figment::from(figment::providers::Serialized::defaults(Config {
+///     int_or_str: Either::Right("hi".into()),
+///     path_or_bytes: Either::Right(vec![3, 7, 13]),
+/// })).extract().unwrap();
+///
+/// assert_eq!(config.int_or_str, Either::Right("hi".into()));
+/// assert_eq!(config.path_or_bytes, Either::Right(vec![3, 7, 13]));
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 // #[derive(Serialize)]
@@ -396,10 +433,25 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         de: ConfiguredValueDe<'c>,
         visitor: V
     ) -> Result<V::Value, Error>{
+        let config = de.config;
         let mut map = crate::value::Map::new();
+
+        // If we have this struct with a non-default tag, use it.
+        if let Some(dict) = de.value.as_dict() {
+            if let Some(tagv) = dict.get(Self::FIELDS[0]) {
+                if let Ok(false) = tagv.deserialize::<Tag>().map(|t| t.is_default()) {
+                    return visitor.visit_map(MapDe::new(dict, |v| {
+                        ConfiguredValueDe::from(config, v)
+                    }));
+                }
+            }
+        }
+
+        // If we have this struct with default tag, use the value.
+        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or_else(|| &de.value);
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
-        map.insert(Self::FIELDS[1].into(), de.value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(de.config, v)))
+        map.insert(Self::FIELDS[1].into(), value.clone());
+        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
     }
 }
 

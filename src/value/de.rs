@@ -345,6 +345,7 @@ impl Value {
     }
 }
 
+#[derive(Debug)]
 struct RawValue(Value);
 
 impl<'de> Deserialize<'de> for RawValue {
@@ -423,9 +424,9 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let mut raw_val: Option<RawValue> = None;
         while let Some(key) = map.next_key()? {
             if key == Value::FIELDS[0] {
-                id = map.next_value().expect("value for key");
+                id = Some(map.next_value().expect("value for key"));
             } else if key == Value::FIELDS[1] {
-                raw_val = map.next_value().expect("value for key");
+                raw_val = Some(map.next_value().expect("value for key"));
             }  else {
                 dict.insert(key, map.next_value().expect("value for key"));
             }

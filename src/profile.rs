@@ -276,25 +276,25 @@ impl PartialEq<&Profile> for Profile {
     }
 }
 
-struct Visitor;
-
 impl<'de> de::Deserialize<'de> for Profile {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where D: serde::Deserializer<'de>
     {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = Profile;
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+                formatter.write_str("a string")
+            }
+
+            fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(Profile::from(v))
+            }
+        }
+
         deserializer.deserialize_str(Visitor)
-    }
-}
-
-impl<'de> de::Visitor<'de> for Visitor {
-    type Value = Profile;
-
-    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
-        formatter.write_str("a string")
-    }
-
-    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-        Ok(Profile::from(v))
     }
 }
 
