@@ -299,7 +299,7 @@ pub trait Format: Sized {
     /// Parses the file at `path` as the data format `Self` as a `T` or returns
     /// an error if the `string` is an invalid `T`. The default implementation
     /// calls [`Format::from_str()`] with the contents of the file.
-    fn from_path<T: DeserializeOwned>(path: &Path) -> Result<T, Self::Error> {
+    fn from_path<T: DeserializeOwned, P: AsRef<Path>>(path: P) -> Result<T, Self::Error> {
         let mut source = String::new();
         std::fs::File::open(path)
             .map(|file| BufReader::new(file))
