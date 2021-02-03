@@ -98,7 +98,7 @@ pub fn diff_paths<P, B>(path: P, base: B) -> Option<PathBuf>
         }
     }
 
-    Some(comps.iter().map(|c| c.as_os_str()).collect::<PathBuf>().into())
+    Some(comps.iter().map(|c| c.as_os_str()).collect())
 }
 
 /// A helper to deserialize `0/false` as `false` and `1/true` as `true`.

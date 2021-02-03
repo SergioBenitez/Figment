@@ -350,7 +350,7 @@ struct RawValue(Value);
 
 impl<'de> Deserialize<'de> for RawValue {
     fn deserialize<D: Deserializer<'de>>(de: D) -> result::Result<Self, D::Error> {
-        de.deserialize_any(ValueVisitor).map(|v| RawValue(v))
+        de.deserialize_any(ValueVisitor).map(RawValue)
     }
 }
 
@@ -434,7 +434,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 
         if let Some(mut value) = raw_val {
             if let Some(id) = id {
-                value.0.map_tag(|t| *t = Tag::from(id));
+                value.0.map_tag(|t| *t = id);
             }
 
             return Ok(value.0);

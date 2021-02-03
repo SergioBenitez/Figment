@@ -15,10 +15,7 @@ pub fn is_whitespace(&byte: &char) -> bool {
 
 #[inline(always)]
 fn is_not_separator(&byte: &char) -> bool {
-    match byte {
-        ',' | '{' | '}' | '[' | ']' => false,
-        _ => true
-    }
+    !matches!(byte, ',' | '{' | '}' | '[' | ']')
 }
 
 #[inline(always)]
@@ -37,7 +34,7 @@ fn key<'a>(input: &mut Input<'a>) -> Result<'a, String> {
 
 #[parser]
 fn key_value<'a>(input: &mut Input<'a>) -> Result<'a, (String, Value)> {
-    let key = (surrounded(key, is_whitespace)?, eat('=')?).0.to_string();
+    let key = (surrounded(key, is_whitespace)?, eat('=')?).0;
     (key, surrounded(value, is_whitespace)?)
 }
 
@@ -110,6 +107,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)] // false positive: using the PI constant would be wrong here
     fn check_simple_values_parse() {
         assert_parse_eq! {
             "true" => true,

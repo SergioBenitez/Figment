@@ -132,7 +132,7 @@ impl Figment {
         let id = Tag::next();
         self.metadata.insert(id, metadata);
 
-        let tag = Tag::from(id);
+        let tag = id;
         match (provider.data(), self.value) {
             (Ok(_), e@Err(_)) => self.value = e,
             (Err(e), Ok(_)) => self.value = Err(e.retagged(tag)),
@@ -198,8 +198,8 @@ impl Figment {
     /// Merges the selected profile with the default and global profiles.
     fn merged(&self) -> Result<Value> {
         let mut map = self.value.clone()?;
-        let def = map.remove(&Profile::Default).unwrap_or(Dict::new());
-        let global = map.remove(&Profile::Global).unwrap_or(Dict::new());
+        let def = map.remove(&Profile::Default).unwrap_or_default();
+        let global = map.remove(&Profile::Global).unwrap_or_default();
 
         let map = match map.remove(&self.profile) {
             Some(v) if self.profile.is_custom() => def.merge(v).merge(global),
@@ -287,7 +287,7 @@ impl Figment {
     /// ```
     pub fn extract_inner<'a, T: Deserialize<'a>>(&self, key: &str) -> Result<T> {
         let merged = self.merged().map_err(|e| e.resolved(self))?;
-        let inner = merged.find(key).ok_or(Kind::MissingField(key.to_string().into()))?;
+        let inner = merged.find(key).ok_or_else(|| Kind::MissingField(key.to_string().into()))?;
         T::deserialize(ConfiguredValueDe::from(self, &inner))
     }
 

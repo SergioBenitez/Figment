@@ -164,7 +164,7 @@ impl Error {
             e.profile = e.tag.profile()
                 .or_else(|| Some(config.profile().clone()));
 
-            error = e.prev.as_mut().map(|v| &mut **v);
+            error = e.prev.as_deref_mut();
         }
 
         self
@@ -183,10 +183,7 @@ impl Error {
     /// assert!(error.missing());
     /// ```
     pub fn missing(&self) -> bool {
-        match self.kind {
-            Kind::MissingField(..) => true,
-            _ => false
-        }
+        matches!(self.kind, Kind::MissingField(..))
     }
 
     /// Append the string `path` to the error's path.

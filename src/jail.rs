@@ -144,7 +144,7 @@ impl Jail {
     pub fn create_file<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
         let path = path.as_ref();
         if !path.is_relative() {
-            Err("Jail::create_file(): file path is absolute".to_string())?;
+            return Err("Jail::create_file(): file path is absolute".to_string().into());
         }
 
         let file = File::create(self.directory().join(path)).map_err(as_string)?;
@@ -180,7 +180,7 @@ impl Jail {
 
 impl Drop for Jail {
     fn drop(&mut self) {
-        self.env_vars.iter().for_each(|k| std::env::remove_var(k));
+        self.env_vars.iter().for_each(std::env::remove_var);
         let _ = std::env::set_current_dir(&self.old_cwd);
     }
 }

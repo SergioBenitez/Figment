@@ -135,7 +135,7 @@ impl Magic for RelativePathBuf {
         }
 
         // If we have this struct with no metadata_path, still use the value.
-        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or_else(|| &de.value);
+        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(&de.value);
         map.insert(Self::FIELDS[1].into(), value.clone());
         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
     }
@@ -448,7 +448,7 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         }
 
         // If we have this struct with default tag, use the value.
-        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or_else(|| &de.value);
+        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(&de.value);
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), value.clone());
         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
@@ -810,7 +810,7 @@ mod _serde {
                         })
                     }
                 }
-                const FIELDS: &'static [&'static str] = &[
+                const FIELDS: &[&str] = &[
                     "___figment_relative_metadata_path",
                     "___figment_relative_path",
                 ];
@@ -1166,7 +1166,7 @@ mod _serde {
                         })
                     }
                 }
-                const FIELDS: &'static [&'static str] =
+                const FIELDS: &[&str] =
                     &["___figment_tagged_tag", "___figment_tagged_value"];
                 _serde::Deserializer::deserialize_struct(
                     __deserializer,
