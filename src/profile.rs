@@ -48,12 +48,10 @@ impl From<ProfileTag> for Option<Profile> {
 
 impl From<&Profile> for ProfileTag {
     fn from(profile: &Profile) -> Self {
-        if profile == &Profile::Default {
-            ProfileTag::Default
-        } else if profile == &Profile::Global {
-            ProfileTag::Global
-        } else {
-            ProfileTag::Custom
+        match profile {
+            p if p == Profile::Default => ProfileTag::Default,
+            p if p == Profile::Global => ProfileTag::Global,
+            _ => ProfileTag::Custom
         }
     }
 }
@@ -194,7 +192,7 @@ impl Profile {
     /// assert!(!Profile::Global.is_custom());
     /// ```
     pub fn is_custom(&self) -> bool {
-        self != &Profile::Default && self != &Profile::Global
+        self != Profile::Default && self != Profile::Global
     }
 
     /// Creates a new map with a single key of `*self` and a value of `dict`.

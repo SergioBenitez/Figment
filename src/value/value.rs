@@ -136,7 +136,7 @@ impl Value {
     /// assert!(value.clone().find("pineapple").is_none());
     /// ```
     pub fn find(self, path: &str) -> Option<Value> {
-        fn find<'a>(mut keys: Split<'a, char>, value: Value) -> Option<Value> {
+        fn find(mut keys: Split<char>, value: Value) -> Option<Value> {
             match keys.next() {
                 Some(k) if !k.is_empty() => find(keys, value.into_dict()?.remove(k)?),
                 Some(_) | None => Some(value)
@@ -353,9 +353,9 @@ macro_rules! impl_from_array {
 
 impl_from_array!(1, 2, 3, 4, 5, 6, 7, 8);
 
-impl<'a> From<&'a str> for Value {
-    fn from(value: &'a str) -> Value {
-        Value::String(Tag::Default, value.to_string().into())
+impl From<&str> for Value {
+    fn from(value: &str) -> Value {
+        Value::String(Tag::Default, value.to_string())
     }
 }
 

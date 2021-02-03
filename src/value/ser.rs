@@ -125,14 +125,14 @@ impl Serializer for ValueSerializer {
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         Ok(SeqSerializer {
-            sequence: len.map(|n| Vec::with_capacity(n)).unwrap_or_default()
+            sequence: len.map(Vec::with_capacity).unwrap_or_default()
         })
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
         Ok(MapSerializer {
-            keys: len.map(|n| Vec::with_capacity(n)).unwrap_or_default(),
-            values: len.map(|n| Vec::with_capacity(n)).unwrap_or_default(),
+            keys: len.map(Vec::with_capacity).unwrap_or_default(),
+            values: len.map(Vec::with_capacity).unwrap_or_default(),
         })
     }
 
@@ -295,7 +295,7 @@ impl<'a> ser::SerializeMap for MapSerializer {
     {
         match key.serialize(ValueSerializer)? {
             Value::String(_, s) => self.keys.push(s),
-            v => Err(Kind::UnsupportedKey(v.to_actual(), "string".into()))?
+            v => return Err(Kind::UnsupportedKey(v.to_actual(), "string".into()).into()),
         };
 
         Ok(())

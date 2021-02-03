@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use std::io::{Read, BufReader};
 use std::path::{Path, PathBuf};
 
 use serde::de::{self, DeserializeOwned};
@@ -300,12 +299,7 @@ pub trait Format: Sized {
     /// an error if the `string` is an invalid `T`. The default implementation
     /// calls [`Format::from_str()`] with the contents of the file.
     fn from_path<T: DeserializeOwned>(path: &Path) -> Result<T, Self::Error> {
-        let mut source = String::new();
-        std::fs::File::open(path)
-            .map(|file| BufReader::new(file))
-            .and_then(|mut reader| reader.read_to_string(&mut source))
-            .map_err(|e| de::Error::custom(e))?;
-
+        let source = std::fs::read_to_string(path).map_err(de::Error::custom)?;
         Self::from_str(&source)
     }
 

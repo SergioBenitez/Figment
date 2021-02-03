@@ -296,7 +296,7 @@ impl Env {
     /// });
     /// ```
     pub fn ignore(self, keys: &[&str]) -> Self {
-        let keys: Vec<String> = keys.iter().map(|s| s.to_string().into()).collect();
+        let keys: Vec<String> = keys.iter().map(|s| s.to_string()).collect();
         self.filter(move |key| !keys.iter().any(|k| k.as_str() == key))
     }
 
@@ -325,7 +325,7 @@ impl Env {
     /// });
     /// ```
     pub fn only(self, keys: &[&str]) -> Self {
-        let keys: Vec<String> = keys.iter().map(|s| s.to_string().into()).collect();
+        let keys: Vec<String> = keys.iter().map(|s| s.to_string()).collect();
         self.filter(move |key| keys.iter().any(|k| k.as_str() == key))
     }
 
@@ -452,7 +452,7 @@ impl Provider for Env {
                     .map(|k| k.to_ascii_uppercase())
                     .collect();
 
-                format!("{}", keys.join("."))
+                keys.join(".")
             });
 
         if let Some(prefix) = &self.prefix {
