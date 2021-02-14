@@ -26,11 +26,12 @@ use crate::value::{Value, Map, Dict};
 ///
 ///   * **Data (Keyed)**
 ///
-///     When keyed, the `T` can serialize as any [`Value`] and is emitted as the
-///     value of the configured `key`. Specifically, nested dictionaries are
-///     created for every path component delimited by `.` in the key string (3
-///     in `a.b.c`), each dictionary mapping to its parent, and the value
-///     mapping to the leaf.
+///     When keyed ([`Serialized::default()`], [`Serialized::global()`],
+///     [`Serialized::key()`]), `T` can serialize to any [`Value`] and is
+///     emitted as the value of the configured `key`. Specifically, nested
+///     dictionaries are created for every path component delimited by `.` in
+///     the key string (3 in `a.b.c`), each dictionary mapping to its parent,
+///     and the serialized `T` mapping to the leaf.
 #[derive(Debug, Clone)]
 pub struct Serialized<T> {
     /// The value to be serialized and used as the provided data.

@@ -270,20 +270,44 @@ impl<F: Format> Provider for Data<F> {
 /// implementing [`Format`], they become [`Provider`]s indirectly via the
 /// [`Data`] type, which serves as a provider for all `T: Format`.
 ///
+/// ```rust
+/// use figment::providers::Format;
+///
+/// # use serde::de::DeserializeOwned;
+/// # struct T;
+/// # impl Format for T {
+/// #     type Error = serde::de::value::Error;
+/// #     const NAME: &'static str = "T";
+/// #     fn from_str<'de, T: DeserializeOwned>(_: &'de str) -> Result<T, Self::Error> { todo!() }
+/// # }
+/// # fn is_provider<T: figment::Provider>(_: T) {}
+/// // If `T` implements `Format`, `T` is a `Provider`.
+/// // Initialize it with `T::file()` or `T::string()`.
+/// let provider = T::file("foo.fmt");
+/// # is_provider(provider);
+/// let provider = T::string("some -- format");
+/// # is_provider(provider);
+/// ```
+///
+/// [`Data<T>`]: Data
+///
 /// # Implementing
 ///
-/// There are two primary implementation items to consider:
+/// There are two primary implementation items:
 ///
-///   1. [`NAME`]: This should be the name of the data format: `"JSON"` or
-///      `"TOML"`. The string is used in the [metadata for
-///      `Data`](Data#provider-details).
+///   1. [`Format::NAME`]: This should be the name of the data format: `"JSON"`
+///      or `"TOML"`. The string is used in the [metadata for `Data`].
 ///
-///   2. [`from_str()`]: This is the core string deserialization method, for
-///      instance, [`toml::from_str`]. For writing a custom data format, see
-///      [serde's writing a data format guide](https://serde.rs/data-format.html).
+///   2. [`Format::from_str()`]: This is the core string deserialization method.
+///      A typical implementation will simply call an existing method like
+///      [`toml::from_str`]. For writing a custom data format, see [serde's
+///      writing a data format guide].
+///
+/// The default implementations for [`Format::from_path()`], [`Format::file()`],
+/// and [`Format::string()`] methods should likely not be overwritten.
 ///
 /// [`NAME`]: Format::NAME
-/// [`from_str()`]: Format::from_str
+/// [serde's writing a data format guide]: https://serde.rs/data-format.html
 pub trait Format: Sized {
     /// The data format's error type.
     type Error: de::Error;

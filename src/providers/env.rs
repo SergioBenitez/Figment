@@ -38,6 +38,19 @@ crate::util::cloneable_fn_trait!(
 /// [`Array`]: crate::value::Value::Array
 /// [`String`]: crate::value::Value::String
 ///
+/// # Key Paths (nesting)
+///
+/// Because environment variables names are emitted as [key paths] in the
+/// provided data, a nested dictionary is created for every component of the
+/// name delimited by `.`, each a parent of the next, with the leaf mapping to
+/// environment variable `Value`. For example, the environment variable
+/// `a.b.c=3` creates the mapping `a -> b -> c -> 3` in the emitted data.
+///
+/// Environment variable names cannot typically contain the `.` character, but
+/// another character can be used in its place by replacing that character in
+/// the name with `.` with [`Env::map()`]. The [`Env::split()`] method is a
+/// convenience method that does exactly this.
+///
 /// # Provider Details
 ///
 ///   * **Profile**
@@ -86,8 +99,7 @@ impl Env {
     {
         let filter_map = self.filter_map;
         Env {
-            filter_map: Box::new(move |key| f(filter_map(key))),
-            profile: self.profile,
+            filter_map: Box::new(move |key| f(filter_map(key))), profile: self.profile,
             prefix: self.prefix
         }
     }
@@ -167,10 +179,11 @@ impl Env {
     ///     jail.set_env("BAR_BAR", "hi");
     ///     jail.set_env("foobar", "hi");
     ///
+    ///     // We'll be left with `FOO_FOO=100` and `foobar=hi`.
     ///     let env = Env::raw().filter(|k| k.starts_with("foo"));
     ///     assert_eq!(env.iter().count(), 2);
     ///
-    ///     // Filters chains, like iterator adapters.
+    ///     // Filters chain, like iterator adapters. `FOO_FOO=100` remains.
     ///     let env = env.filter(|k| k.as_str().contains('_'));
     ///     assert_eq!(env.iter().count(), 1);
     ///
@@ -194,19 +207,22 @@ impl Env {
     ///     jail.set_env("BAR_FOO", "hi");
     ///     jail.set_env("foobar", "hi");
     ///
+    ///     // This is like `prefixed("foo_")` without the filtering.
     ///     let env = Env::raw().map(|k| match k.starts_with("foo_") {
     ///         true => k["foo_".len()..].into(),
     ///         false => k.into()
     ///     });
     ///
+    ///     // We now have `FOO=100`, `BAR_FOO=hi`, and `bar=hi`.
     ///     assert_eq!(env.clone().filter(|k| k == "foo").iter().count(), 1);
     ///
-    ///     // Mappings chains, like iterator adapters.
+    ///     // Mappings chain, like iterator adapters.
     ///     let env = env.map(|k| match k.starts_with("bar_") {
     ///         true => k["bar_".len()..].into(),
     ///         false => k.into()
     ///     });
     ///
+    ///     // We now have `FOO=100`, `FOO=hi`, and `bar=hi`.
     ///     assert_eq!(env.filter(|k| k == "foo").iter().count(), 2);
     ///     Ok(())
     /// });

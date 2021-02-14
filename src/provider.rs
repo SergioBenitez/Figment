@@ -101,6 +101,7 @@ pub trait Provider {
     fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> { None }
 }
 
+/// This is exactly `<T as Provider>`.
 impl<T: Provider> Provider for &T {
     fn metadata(&self) -> Metadata { T::metadata(self) }
 

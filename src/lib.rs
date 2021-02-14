@@ -262,7 +262,7 @@
 //!     assert_eq!(config_def, Config { name: "Base-Global".into(), });
 //!     assert_eq!(config_deb, Config { name: "Base-Global".into(), });
 //!
-//!     // Merges from succeeding provides take precedence, even for globals.
+//!     // Merges from succeeding providers take precedence, even for globals.
 //!     jail.create_file("App.toml", r#"
 //!         [debug]
 //!         name = "App-Debug"
@@ -298,11 +298,11 @@
 //! In addition to the four gated providers, figment provides the following
 //! providers out-of-the-box:
 //!
-//! | provider                              | description                           |
-//! |---------------------------------------|---------------------------------------|
-//! | [`providers::Serialized`]             | Source from any [`Serialize`] type.   |
-//! | [`(impl AsRef<str>, impl Serialize)`] | Source from a tuple `("key", value)`. |
-//! | [`&T` _where_ `T: Provider`]          | A reference to any provider.          |
+//! | provider                              | description                            |
+//! |---------------------------------------|----------------------------------------|
+//! | [`providers::Serialized`]             | Source from any [`Serialize`] type.    |
+//! | [`(impl AsRef<str>, impl Serialize)`] | Global source from a `("key", value)`. |
+//! | [`&T` _where_ `T: Provider`]          | Source from `T` as a reference.        |
 //!
 //! [`Serialize`]: serde::Serialize
 //! [`(impl AsRef<str>, impl Serialize)`]: Provider#impl-Provider-for-(K%2C%20V)
@@ -461,7 +461,7 @@
 //!
 //! Some things to remember when working with Figment:
 //!
-//!   * Merging and joining is _eager_: sources are read immediately. It's
+//!   * Merging and joining are _eager_: sources are read immediately. It's
 //!     useful to define a function that returns a `Figment`.
 //!   * The [`util`] modules contains helpful serialize and deserialize
 //!     implementations for defining `Config` structures.

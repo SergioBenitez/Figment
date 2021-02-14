@@ -243,7 +243,8 @@ use crate::value::{Value, Dict};
 
 /// Given a key path `key` of the form `a.b.c`, creates nested dictionaries for
 /// for every path component delimited by `.` in the path string (3 in `a.b.c`),
-/// each dictionary mapping to its parent, and `value` mapping to the leaf.
+/// each a parent of the next, and the leaf mapping to `value` (`a` -> `b` ->
+/// `c` -> `value`).
 ///
 /// If `key` is empty, simply returns `value`. Otherwise, `Value` will be a
 /// dictionary with the nested mappings.

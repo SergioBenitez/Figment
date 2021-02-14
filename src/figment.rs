@@ -62,7 +62,7 @@ use crate::coalesce::{Coalescible, Order};
 /// ## Metadata
 ///
 /// Every value collected by a `Figment` is accompanied by the metadata produced
-/// by the value's provider. Additionally, [`Metadata::provide_source`] is set
+/// by the value's provider. Additionally, [`Metadata::provide_location`] is set
 /// by `from`, `merge` and `join` to the caller's location. `Metadata` can be
 /// retrieved in one of several ways:
 ///
