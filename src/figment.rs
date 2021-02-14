@@ -129,23 +129,21 @@ impl Figment {
         let mut metadata = provider.metadata();
         metadata.provide_location = Some(Location::caller());
 
-        let id = Tag::next();
-        self.metadata.insert(id, metadata);
-
-        let tag = id;
-        match (provider.data(), self.value) {
-            (Ok(_), e@Err(_)) => self.value = e,
-            (Err(e), Ok(_)) => self.value = Err(e.retagged(tag)),
-            (Err(e), Err(prev)) => self.value = Err(e.retagged(tag).chain(prev)),
+        let tag = Tag::next();
+        self.metadata.insert(tag, metadata);
+        self.value = match (provider.data(), self.value) {
+            (Ok(_), e@Err(_)) => e,
+            (Err(e), Ok(_)) => Err(e.retagged(tag)),
+            (Err(e), Err(prev)) => Err(e.retagged(tag).chain(prev)),
             (Ok(mut new), Ok(old)) => {
                 new.iter_mut()
                     .map(|(p, map)| std::iter::repeat(p).zip(map.values_mut()))
                     .flatten()
                     .for_each(|(p, v)| v.map_tag(|t| *t = tag.for_profile(p)));
 
-                self.value = Ok(old.coalesce(new, order));
+                Ok(old.coalesce(new, order))
             }
-        }
+        };
 
         self
     }
