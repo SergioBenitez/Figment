@@ -195,7 +195,7 @@ impl Figment {
 
     /// Merges the selected profile with the default and global profiles.
     fn merged(&self) -> Result<Value> {
-        let mut map = self.value.clone()?;
+        let mut map = self.value.clone().map_err(|e| e.resolved(self))?;
         let def = map.remove(&Profile::Default).unwrap_or_default();
         let global = map.remove(&Profile::Global).unwrap_or_default();
 
@@ -254,8 +254,7 @@ impl Figment {
     /// });
     /// ```
     pub fn extract<'a, T: Deserialize<'a>>(&self) -> Result<T> {
-        let merged = self.merged().map_err(|e| e.resolved(self))?;
-        T::deserialize(ConfiguredValueDe::from(self, &merged))
+        T::deserialize(ConfiguredValueDe::from(self, &self.merged()?))
     }
 
     /// Deserializes the value at the `key` path in the collected value into
@@ -284,9 +283,7 @@ impl Figment {
     /// });
     /// ```
     pub fn extract_inner<'a, T: Deserialize<'a>>(&self, key: &str) -> Result<T> {
-        let merged = self.merged().map_err(|e| e.resolved(self))?;
-        let inner = merged.find(key).ok_or_else(|| Kind::MissingField(key.to_string().into()))?;
-        T::deserialize(ConfiguredValueDe::from(self, &inner))
+        T::deserialize(ConfiguredValueDe::from(self, &self.find_value(key)?))
     }
 
     /// Returns an iterator over the metadata for all of the collected values in
