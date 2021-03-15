@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{Write, BufWriter};
 use std::path::{Path, PathBuf};
 use std::fmt::Display;
+use std::ffi::{OsStr, OsString};
+use std::collections::HashMap;
 
 use tempfile::TempDir;
 use parking_lot::Mutex;
@@ -56,8 +58,8 @@ use crate::error::Result;
 pub struct Jail {
     _directory: TempDir,
     canonical_dir: PathBuf,
-    env_vars: Vec<String>,
-    old_cwd: PathBuf,
+    saved_env_vars: HashMap<OsString, Option<OsString>>,
+    saved_cwd: PathBuf,
 }
 
 fn as_string<S: Display>(s: S) -> String { s.to_string() }
@@ -69,7 +71,8 @@ impl Jail {
     ///
     /// # Panics
     ///
-    /// Panics if `f` returns an `Err`; prints the error message.
+    /// Panics if `f` panics or if [`Jail::try_with(f)`](Jail::try_with) returns
+    /// an `Err`; prints the error message.
     ///
     /// # Example
     ///
@@ -87,8 +90,12 @@ impl Jail {
         }
     }
 
-    /// Creates a new jail that calls `f`, passing itself to `f`. Does not panic;
-    /// returns the result from `f`.
+    /// Creates a new jail that calls `f`, passing itself to `f`. Returns the
+    /// result from `f` if `f` does not panic.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `f` panics.
     ///
     /// # Example
     ///
@@ -106,8 +113,8 @@ impl Jail {
         let mut jail = Jail {
             canonical_dir: directory.path().canonicalize().map_err(as_string)?,
             _directory: directory,
-            old_cwd: std::env::current_dir().map_err(as_string)?,
-            env_vars: vec![],
+            saved_cwd: std::env::current_dir().map_err(as_string)?,
+            saved_env_vars: HashMap::new(),
         };
 
         std::env::set_current_dir(jail.directory()).map_err(as_string)?;
@@ -173,14 +180,23 @@ impl Jail {
     /// ```
     pub fn set_env<K: AsRef<str>, V: Display>(&mut self, k: K, v: V) {
         let key = k.as_ref();
-        self.env_vars.push(key.to_string());
+        if !self.saved_env_vars.contains_key(OsStr::new(key)) {
+            self.saved_env_vars.insert(key.into(), std::env::var_os(key));
+        }
+
         std::env::set_var(key, v.to_string());
     }
 }
 
 impl Drop for Jail {
     fn drop(&mut self) {
-        self.env_vars.iter().for_each(std::env::remove_var);
-        let _ = std::env::set_current_dir(&self.old_cwd);
+        for (key, value) in self.saved_env_vars.iter() {
+            match value {
+                Some(val) => std::env::set_var(key, val),
+                None => std::env::remove_var(key)
+            }
+        }
+
+        let _ = std::env::set_current_dir(&self.saved_cwd);
     }
 }
