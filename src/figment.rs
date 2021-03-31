@@ -207,6 +207,78 @@ impl Figment {
         Ok(Value::Dict(Tag::Default, map))
     }
 
+    /// Returns a new `Figment` containing only the sub-dictionaries at `key`.
+    ///
+    /// This "sub-figment" is a _focusing_ of `self` with the property that:
+    ///
+    ///   * `self.find(key + ".sub")` <=> `focused.find("sub")`
+    ///
+    /// In other words, all values in `self` with a key starting with `key` are
+    /// in `focused` _without_ the prefix and vice-versa.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use figment::{Figment, providers::{Format, Toml, Json}};
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_file("Config.toml", r#"
+    ///         cat = [1, 2, 3]
+    ///         dog = [4, 5, 6]
+    ///
+    ///         [subtree]
+    ///         cat = "meow"
+    ///         dog = "woof!"
+    ///
+    ///         [subtree.bark]
+    ///         dog = true
+    ///         cat = false
+    ///     "#)?;
+    ///
+    ///     let root = Figment::from(Toml::file("Config.toml"));
+    ///     assert_eq!(root.extract_inner::<Vec<u8>>("cat").unwrap(), vec![1, 2, 3]);
+    ///     assert_eq!(root.extract_inner::<Vec<u8>>("dog").unwrap(), vec![4, 5, 6]);
+    ///     assert_eq!(root.extract_inner::<String>("subtree.cat").unwrap(), "meow");
+    ///     assert_eq!(root.extract_inner::<String>("subtree.dog").unwrap(), "woof!");
+    ///
+    ///     let subtree = root.focus("subtree");
+    ///     assert_eq!(subtree.extract_inner::<String>("cat").unwrap(), "meow");
+    ///     assert_eq!(subtree.extract_inner::<String>("dog").unwrap(), "woof!");
+    ///     assert_eq!(subtree.extract_inner::<bool>("bark.cat").unwrap(), false);
+    ///     assert_eq!(subtree.extract_inner::<bool>("bark.dog").unwrap(), true);
+    ///
+    ///     let bark = subtree.focus("bark");
+    ///     assert_eq!(bark.extract_inner::<bool>("cat").unwrap(), false);
+    ///     assert_eq!(bark.extract_inner::<bool>("dog").unwrap(), true);
+    ///
+    ///     let not_a_dict = root.focus("cat");
+    ///     assert!(not_a_dict.extract_inner::<bool>("cat").is_err());
+    ///     assert!(not_a_dict.extract_inner::<bool>("dog").is_err());
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn focus(&self, key: &str) -> Self {
+        fn try_focus(figment: &Figment, key: &str) -> Result<Map<Profile, Dict>> {
+            let map = figment.value.clone().map_err(|e| e.resolved(figment))?;
+            let new_map = map.into_iter()
+                .filter_map(|(k, v)| {
+                    let focused = Value::Dict(Tag::Default, v).find(key)?;
+                    let dict = focused.into_dict()?;
+                    Some((k, dict))
+                })
+                .collect();
+
+            Ok(new_map)
+        }
+
+        Figment {
+            profile: self.profile.clone(),
+            metadata: self.metadata.clone(),
+            value: try_focus(self, key)
+        }
+    }
+
     /// Deserializes the collected value into `T`.
     ///
     /// # Example
