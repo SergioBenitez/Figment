@@ -347,7 +347,12 @@ impl Env {
 
     /// Returns an iterator over all of the environment variable `(key, value)`
     /// pairs that will be considered by `self`. The order is not specified.
-    /// Keys are always lower-case. Empty keys are not emitted.
+    ///
+    /// Keys are lower-cased with leading and trailing whitespace removed. Empty
+    /// keys are not emitted.
+    ///
+    /// Any non-Unicode sequences in values are replaced with `U+FFFD
+    /// REPLACEMENT CHARACTER`. Values are otherwise unmodified.
     ///
     /// ```rust
     /// use figment::{Jail, providers::Env};
@@ -377,13 +382,15 @@ impl Env {
     /// });
     /// ```
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uncased, String)> + 'a {
-        std::env::vars_os().filter_map(move |(k, v)| {
-            if k.is_empty() { return None; }
-            let key = Uncased::from(k.to_string_lossy());
-            let mapped_key = (self.filter_map)(&key)?;
-            let lower = mapped_key.as_str().to_ascii_lowercase();
-            Some((lower.into(), v.to_string_lossy().to_string()))
-        })
+        std::env::vars_os()
+            .filter(|(k, _)| !k.is_empty())
+            .filter_map(move |(k, v)| {
+                let key = Uncased::from(k.to_string_lossy());
+                let key = (self.filter_map)(&key)?;
+                let key = key.as_str().trim().to_ascii_lowercase();
+                if key.is_empty() { return None; }
+                Some((key.into(), v.to_string_lossy().to_string()))
+            })
     }
 
     /// Sets the profile config data will be emitted to.
