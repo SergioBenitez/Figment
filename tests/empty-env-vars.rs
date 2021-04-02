@@ -41,6 +41,20 @@ fn empty_env_vars() {
 
         assert_eq!(config.foo, "bar");
 
+        jail.set_env("___foo", "is here");
+        let config = Figment::new()
+            .merge(Env::raw().split("_"))
+            .extract::<Config>()?;
+
+        assert_eq!(config.foo, "bar");
+
+        jail.set_env("foo__", "is here");
+        let config = Figment::new()
+            .merge(Env::raw().split("_"))
+            .extract::<Config>()?;
+
+        assert_eq!(config.foo, "bar");
+
         Ok(())
     });
 }

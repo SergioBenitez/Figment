@@ -349,7 +349,7 @@ impl Env {
     /// pairs that will be considered by `self`. The order is not specified.
     ///
     /// Keys are lower-cased with leading and trailing whitespace removed. Empty
-    /// keys are not emitted.
+    /// keys, or partially empty keys, are not emitted.
     ///
     /// Any non-Unicode sequences in values are replaced with `U+FFFD
     /// REPLACEMENT CHARACTER`. Values are otherwise unmodified.
@@ -388,7 +388,7 @@ impl Env {
                 let key = Uncased::from(k.to_string_lossy());
                 let key = (self.filter_map)(&key)?;
                 let key = key.as_str().trim().to_ascii_lowercase();
-                if key.is_empty() { return None; }
+                if key.split('.').any(|s| s.is_empty()) { return None }
                 Some((key.into(), v.to_string_lossy().to_string()))
             })
     }
