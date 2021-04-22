@@ -15,7 +15,7 @@ crate::util::cloneable_fn_trait!(
 /// A [`Provider`] that sources its values from environment variables.
 ///
 /// All key-lookups and comparisons are case insensitive, facilitated by the
-/// [`UncasedStr`] and [`Uncased`] types. Environment variables names are
+/// [`UncasedStr`] and [`Uncased`] types. Environment variable names are
 /// converted to lowercase before being emitted as [key paths] in the provided
 /// data. Environment variable values can contain structured data, parsed as a
 /// [`Value`], with syntax resembling TOML:
@@ -26,8 +26,34 @@ crate::util::cloneable_fn_trait!(
 ///   * [`Num::Isize`]: any negative integer (e.g, `APP_VAR=-10`)
 ///   * [`Array`]: delimited by `[]` (e.g, `APP_VAR=[true, 1.0, -1]`)
 ///   * [`Dict`]: in the form `{key=value}` (e.g, `APP_VAR={key="value",num=10}`)
-///   * [`String`]: delimited by `""` (e.g, `APP_VAR="hi"`)
+///   * [`String`]: delimited by `"` (e.g, `APP_VAR=\"hi\"`)
 ///   * [`String`]: anything else (e.g, `APP_VAR=hi`, `APP_VAR=[hi`)
+///
+/// Additionally, strings delimited with `"` can contain the following escaped
+/// characters:
+///
+/// ```rust
+/// \b         - backspace       (U+0008)
+/// \t         - tab             (U+0009)
+/// \n         - linefeed        (U+000A)
+/// \f         - form feed       (U+000C)
+/// \r         - carriage return (U+000D)
+/// \"         - quote           (U+0022)
+/// \\         - backslash       (U+005C)
+/// \uXXXX     - unicode         (U+XXXX)
+/// \UXXXXXXXX - unicode         (U+XXXXXXXX)
+/// ```
+///
+/// For example:
+///
+/// ```sh
+/// APP_VAR=\"hello\\nthere\"  => (what in Rust is) "hello\nthere"
+/// APP_VAR=\"hi\\u1234there\" => (what in Rust is) "hi\u{1234}there"
+/// APP_VAR=\"abc\\td\\n\"     => (what in Rust is) "abc\td\n"
+/// ```
+///
+/// Undelimited strings, or strings with invalid escape sequences, are
+/// interpreted exactly as written without any escaping.
 ///
 /// [key paths]: crate::Figment#extraction
 /// [`Value`]: crate::value::Value

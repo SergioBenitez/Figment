@@ -2,10 +2,14 @@
 //!
 mod value;
 mod ser;
-#[cfg(feature = "parse-value")]
-mod parse;
 mod de;
 mod tag;
+
+#[cfg(feature = "parse-value")]
+mod parse;
+
+#[cfg(feature = "parse-value")]
+mod escape;
 
 pub mod magic;
 

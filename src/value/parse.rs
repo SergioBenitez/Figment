@@ -1,15 +1,15 @@
-use pear::parsers::*;
+use pear::{parse_error, parsers::*};
 use pear::combinators::*;
 use pear::macros::{parse, parser, switch};
 use pear::input::{Pear, Text};
 
-use crate::value::{Value, Dict};
+use crate::value::{Value, Dict, escape::escape};
 
 type Input<'a> = Pear<Text<'a>>;
 type Result<'a, T> = pear::input::Result<T, Input<'a>>;
 
 #[inline(always)]
-pub fn is_whitespace(&byte: &char) -> bool {
+fn is_whitespace(&byte: &char) -> bool {
     byte.is_ascii_whitespace()
 }
 
@@ -18,13 +18,26 @@ fn is_not_separator(&byte: &char) -> bool {
     !matches!(byte, ',' | '{' | '}' | '[' | ']')
 }
 
-#[inline(always)]
-pub fn any<T>(_: &T) -> bool { true }
-
 // TODO: Be more permissive here?
 #[inline(always)]
 fn is_ident_char(&byte: &char) -> bool {
     byte.is_ascii_alphanumeric() || byte == '_' || byte == '-'
+}
+
+#[parser]
+fn string<'a>(input: &mut Input<'a>) -> Result<'a, String> {
+    let mut is_escaped = false;
+    let str_char = |&c: &char| -> bool {
+        if is_escaped { is_escaped = false; return true; }
+        if c == '\\' { is_escaped = true; return true; }
+        c != '"'
+    };
+
+    let inner = (eat('"')?, take_while(str_char)?, eat('"')?).1;
+    match escape(inner) {
+        Ok(string) => string.into_owned(),
+        Err(e) => parse_error!("invalid string: {}", e)?,
+    }
 }
 
 #[parser]
@@ -56,7 +69,7 @@ fn value<'a>(input: &mut Input<'a>) -> Result<'a, Value> {
         eat_slice("false") => Value::from(false),
         peek('{') => Value::from(dict()?),
         peek('[') => Value::from(array()?),
-        peek('"') => Value::from(delimited('"', any, '"')?.to_string()),
+        peek('"') => Value::from(string()?),
         peek('\'') => Value::from((eat('\'')?, eat_any()?, eat('\'')?).1),
         _ => {
             let value = take_while(is_not_separator)?.trim();
@@ -131,6 +144,18 @@ mod tests {
             "1.2" => 1.2,
             "  1.2" => 1.2,
             "3.14159" => 3.14159,
+            "\"\\t\"" => "\t",
+            "\"abc\\td\"" => "abc\td",
+            "\"abc\\td\\n\"" => "abc\td\n",
+            "\"abc\\td\\n\\n\"" => "abc\td\n\n",
+            "\"abc\\td\"" => "abc\td",
+            "\"\\\"\"" => "\"",
+            "\"\\n\\f\\b\\\\\\r\\\"\"" => "\n\u{c}\u{8}\\\r\"",
+            "\"\\\"hi\\\"\"" => "\"hi\"",
+            "\"hi\\u1234there\"" => "hi\u{1234}there",
+            "\"\\\\\"" => "\\",
+            // unterminated strings pass through as themselves
+            "\"\\\"" => "\"\\\"",
         }
     }
 
