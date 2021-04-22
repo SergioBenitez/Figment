@@ -32,7 +32,7 @@ crate::util::cloneable_fn_trait!(
 /// Additionally, strings delimited with `"` can contain the following escaped
 /// characters:
 ///
-/// ```rust
+/// ```text
 /// \b         - backspace       (U+0008)
 /// \t         - tab             (U+0009)
 /// \n         - linefeed        (U+000A)
