@@ -73,7 +73,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// # Iterator
 ///
-/// An `Error` may contain more than one error. To process all errors, iterator
+/// An `Error` may contain more than one error. To process all errors, iterate
 /// over an `Error`:
 ///
 /// ```rust
@@ -199,6 +199,37 @@ impl Error {
     pub fn with_path(mut self, path: &str) -> Self {
         self.path.push(path.into());
         self
+    }
+
+    /// Returns the number of errors represented by `self`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use figment::{Figment, providers::{Format, Toml}};
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_file("Base.toml", r#"
+    ///         # oh no, an unclosed array!
+    ///         cat = [1
+    ///     "#)?;
+    ///
+    ///     jail.create_file("Release.toml", r#"
+    ///         # and now an unclosed string!?
+    ///         cat = "
+    ///     "#)?;
+    ///
+    ///     let figment = Figment::from(Toml::file("Base.toml"))
+    ///         .merge(Toml::file("Release.toml"));
+    ///
+    ///     let error = figment.extract_inner::<String>("cat").unwrap_err();
+    ///     assert_eq!(error.count(), 2);
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn count(&self) -> usize {
+        1 + self.prev.as_ref().map_or(0, |e| e.count())
     }
 }
 
