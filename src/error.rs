@@ -437,15 +437,19 @@ impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.kind.fmt(f)?;
 
-        if let (Some(ref profile), Some(ref md)) = (&self.profile, &self.metadata) {
-            write!(f, ":")?;
+        if let (Some(profile), Some(md)) = (&self.profile, &self.metadata) {
             if !self.path.is_empty() {
-                write!(f, " `{}`", md.interpolate(profile, &self.path))?;
+                let key = md.interpolate(profile, &self.path);
+                write!(f, " for key {:?}", key)?;
             }
         }
 
-        if let Some(source) = self.metadata.as_ref().and_then(|m| m.source.as_ref()) {
-            write!(f, " in {}", source)?;
+        if let Some(md) = &self.metadata {
+            if let Some(source) = &md.source {
+                write!(f, " in {} {}", source, md.name)?;
+            } else {
+                write!(f, " in {}", md.name)?;
+            }
         }
 
         if let Some(prev) = &self.prev {
