@@ -4,7 +4,7 @@
 use std::ops::Deref;
 use std::path::{PathBuf, Path};
 
-use serde::{Deserialize, de};
+use serde::{Deserialize, Serialize, de};
 
 use crate::{Error, value::{ConfiguredValueDe, MapDe, Tag}};
 
@@ -77,8 +77,75 @@ pub trait Magic: for<'de> Deserialize<'de> {
 ///     assert_eq!(c.path.original(), Path::new("/var/c.html"));
 ///     assert_eq!(c.path.relative(), Path::new("/var/c.html"));
 ///
+///     // You can use the `From<P: AsRef<Path>>` impl to set defaults:
+///     let figment = Figment::from(Serialized::defaults(Config {
+///         path: "some/default/path".into()
+///     }));
+///
+///     let default: Config = figment.extract()?;
+///     assert_eq!(default.path.original(), Path::new("some/default/path"));
+///     assert_eq!(default.path.relative(), Path::new("some/default/path"));
+///
+///     jail.create_file("Config.toml", r#"path = "an/override""#)?;
+///     let overriden: Config = figment.merge(Toml::file("Config.toml")).extract()?;
+///     assert_eq!(overriden.path.original(), Path::new("an/override"));
+///     assert_eq!(overriden.path.relative(), jail.directory().join("an/override"));
+///
 ///     Ok(())
 /// });
+/// ```
+///
+/// # Serialization
+///
+/// By default, a `RelativePathBuf` serializes into a structure that can only
+/// deserialize as a `RelativePathBuf`. In particular, a `RelativePathBuf` does
+/// not serialize into a value compatible with `PathBuf`. To serialize into a
+/// `Path`, use [`RelativePathBuf::serialize_original()`] or
+/// [`RelativePathBuf::serialize_relative()`] together with serde's
+/// `serialize_with` field attribute:
+///
+/// ```rust
+/// use std::path::PathBuf;
+///
+/// use serde::{Deserialize, Serialize};
+/// use figment::{Figment, value::magic::RelativePathBuf, Jail};
+/// use figment::providers::{Format, Toml, Serialized};
+///
+/// #[derive(Deserialize, Serialize)]
+/// struct Config {
+///     relative: RelativePathBuf,
+///     #[serde(serialize_with = "RelativePathBuf::serialize_original")]
+///     root: RelativePathBuf,
+///     #[serde(serialize_with = "RelativePathBuf::serialize_relative")]
+///     temp: RelativePathBuf,
+/// }
+///
+/// Jail::expect_with(|jail| {
+///     jail.create_file("Config.toml", r#"
+///         relative = "relative/path"
+///         root = "root/path"
+///         temp = "temp/path"
+///     "#)?;
+///
+///     // Create a figment with a serialize `Config`.
+///     let figment = Figment::from(Toml::file("Config.toml"));
+///     let config = figment.extract::<Config>()?;
+///     let figment = Figment::from(Serialized::defaults(config));
+///
+///     // This fails, as expected.
+///     let relative = figment.extract_inner::<PathBuf>("relative");
+///     assert!(relative.is_err());
+///
+///     // These succeed. This one uses the originally written path.
+///     let root = figment.extract_inner::<PathBuf>("root")?;
+///     assert_eq!(root, PathBuf::from("root/path"));
+///
+///     // This one the magic relative path.
+///     let temp = figment.extract_inner::<PathBuf>("temp")?;
+///     assert_eq!(temp, jail.directory().join("temp/path"));
+///
+///     Ok(())
+/// })
 /// ```
 #[derive(Debug, Clone)]
 // #[derive(Deserialize, Serialize)]
@@ -241,6 +308,53 @@ impl RelativePathBuf {
     /// ```
     pub fn metadata_path(&self) -> Option<&Path> {
         self.metadata_path.as_ref().map(|p| p.as_ref())
+    }
+
+    /// Serialize `self` as the [`original`](Self::original()) path.
+    ///
+    /// See [serialization](Self#serialization) for more.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::path::PathBuf;
+    /// use figment::value::magic::RelativePathBuf;
+    /// use serde::Serialize;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Config {
+    ///     #[serde(serialize_with = "RelativePathBuf::serialize_original")]
+    ///     path: RelativePathBuf,
+    /// }
+    /// ```
+    pub fn serialize_original<S>(&self, ser: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer
+    {
+        self.original().serialize(ser)
+    }
+
+    /// Serialize `self` as the [`relative`](Self::relative()) path.
+    ///
+    /// See [serialization](Self#serialization) for more.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::path::PathBuf;
+    /// use figment::value::magic::RelativePathBuf;
+    /// use serde::Serialize;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Config {
+    ///     #[serde(serialize_with = "RelativePathBuf::serialize_relative")]
+    ///     path: RelativePathBuf,
+    /// }
+    /// ```
+    // FIXME: Make this the default? We need a breaking change for this.
+    pub fn serialize_relative<S>(&self, ser: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer
+    {
+        self.relative().serialize(ser)
     }
 }
 
