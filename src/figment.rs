@@ -219,7 +219,7 @@ impl Figment {
     /// # Example
     ///
     /// ```rust
-    /// use figment::{Figment, providers::{Format, Toml, Json}};
+    /// use figment::{Figment, providers::{Format, Toml}};
     ///
     /// figment::Jail::expect_with(|jail| {
     ///     jail.create_file("Config.toml", r#"
