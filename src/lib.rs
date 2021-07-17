@@ -91,7 +91,7 @@
 //!
 //! Most figments will use more than one provider, merging and joining as
 //! necessary. The figment below reads `App.toml`, environment variables
-//! prefixed with `APP_` and fills any holes (but does replace existing values)
+//! prefixed with `APP_` and fills any holes (but does not replace existing values)
 //! with values from `App.json`:
 //!
 //! ```
