@@ -26,7 +26,7 @@ enum Source {
 /// // The `Format` trait must be in-scope to use its methods.
 /// use figment::providers::{Format, Data, Json};
 ///
-/// // These two are equivalaent, except the former requires the explicit type.
+/// // These two are equivalent, except the former requires the explicit type.
 /// let json = Data::<Json>::file("foo.json");
 /// let json = Json::file("foo.json");
 /// ```
@@ -56,7 +56,7 @@ enum Source {
 ///
 ///   * **Data (Nested)**
 ///
-///     When nesting is specified, the source value is exepcted to be a
+///     When nesting is specified, the source value is expected to be a
 ///     dictionary. It's top-level keys are emitted as profiles, and the value
 ///     corresponding to each key as the profile data.
 #[derive(Debug, Clone)]
