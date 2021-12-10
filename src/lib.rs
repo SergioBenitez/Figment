@@ -477,9 +477,9 @@ pub mod value;
 pub mod providers;
 pub mod error;
 pub mod util;
+pub mod coalesce;
 mod figment;
 mod profile;
-mod coalesce;
 mod metadata;
 mod provider;
 
