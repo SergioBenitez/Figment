@@ -97,7 +97,7 @@ impl Profile {
     }
 
     /// Constructs a profile from the value of the environment variable with
-    /// name `name`, if one is present. The search for `name` is
+    /// name `key`, if one is present. The search for `key` is
     /// case-insensitive.
     ///
     /// # Example
@@ -127,8 +127,8 @@ impl Profile {
     }
 
     /// Constructs a profile from the value of the environment variable with
-    /// name `name`, if one is present, or `default` if one is not. The search
-    /// for `name` is case-insensitive.
+    /// name `var`, if one is present, or `default` if one is not. The search
+    /// for `var` is case-insensitive.
     ///
     /// # Example
     ///
