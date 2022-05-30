@@ -236,9 +236,35 @@ impl RelativePathBuf {
         &self.path
     }
 
-    /// Returns this path relative to the file it was delcared in, if any.
-    /// Returns the original if this path was not declared in a file or if the
-    /// path has a root.
+    /// Returns this path resolved relative to the file it was declared in, if any.
+    ///
+    /// If the configured path was relative and it was configured from a file,
+    /// this function returns that path prefixed with that file's parent directory.
+    /// Otherwise it returns the original path. Where `config_file_path` is the
+    /// location of the configuration file, this corresponds to:
+    ///
+    /// ```rust
+    /// # use figment::{Figment, value::magic::RelativePathBuf, Jail};
+    /// # use figment::providers::{Format, Toml};
+    /// # use serde::Deserialize;
+    /// #
+    /// # #[derive(Debug, PartialEq, Deserialize)]
+    /// # struct Config {
+    /// #     path: RelativePathBuf,
+    /// # }
+    /// # Jail::expect_with(|jail| {
+    /// # let config_file_path = jail.directory().join("Config.toml");
+    /// # let config_file = jail.create_file("Config.toml", r#"path = "hello.html""#)?;
+    /// # let config: Config = Figment::from(Toml::file("Config.toml")).extract()?;
+    /// # let relative_path_buf = config.path;
+    /// let relative = config_file_path
+    ///     .parent()
+    ///     .unwrap()
+    ///     .join(relative_path_buf.original());
+    /// # assert_eq!(relative_path_buf.relative(), relative);
+    /// # Ok(())
+    /// # });
+    /// ```
     ///
     /// # Example
     ///
