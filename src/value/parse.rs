@@ -21,7 +21,7 @@ fn is_not_separator(&byte: &char) -> bool {
 // TODO: Be more permissive here?
 #[inline(always)]
 fn is_ident_char(&byte: &char) -> bool {
-    byte.is_ascii_alphanumeric() || byte == '_' || byte == '-'
+    byte.is_ascii_alphanumeric() || byte == '_' || byte == '-' || byte == '.'
 }
 
 #[parser]
@@ -166,6 +166,7 @@ mod tests {
         assert_parse_eq! {
             "[1,2,3]" => vec![1u8, 2u8, 3u8],
             "{a=b}" => map!["a" => "b"],
+            "{a.b=c}" => map!["a.b" => "c"],
             "{a=1,b=3}" => map!["a" => 1u8, "b" => 3u8],
             "{a=1,b=hi}" => map!["a" => v(1u8), "b" => v("hi")],
             "[1,[2],3]" => vec![v(1u8), v(vec![2u8]), v(3u8)],

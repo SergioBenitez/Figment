@@ -287,12 +287,16 @@ impl Env {
     /// Jail::expect_with(|jail| {
     ///     // Without splitting: using structured data.
     ///     jail.set_env("APP_FOO", "{key=10}");
-    ///     jail.set_env("APP_MAP", "{one=1,two=2.0}");
+    ///     jail.set_env("APP_MAP", "{one=1,two=2.0,three.one=3.1}");
     ///
     ///     let config: Config = Figment::from(Env::prefixed("APP_")).extract()?;
     ///     assert_eq!(config, Config {
     ///         foo: Foo { key: 10 },
-    ///         map: map!["one".into() => 1u8.into(), "two".into() => 2.0.into()],
+    ///         map: map![
+    ///             "one".into() => 1u8.into(),
+    ///             "two".into() => 2.0.into(),
+    ///             "three.one".into() =>  3.1.into(),
+    ///         ],
     ///     });
     ///
     ///     // With splitting.
@@ -306,7 +310,11 @@ impl Env {
     ///
     ///     assert_eq!(config, Config {
     ///         foo: Foo { key: 20 },
-    ///         map: map!["one".into() => 1.0.into(), "two".into() => "dos".into()],
+    ///         map: map![
+    ///             "one".into() => 1.0.into(),
+    ///             "two".into() => "dos".into(),
+    ///             "three.one".into() =>  3.1.into(),
+    ///         ],
     ///     });
     ///
     ///     Ok(())
