@@ -74,10 +74,12 @@ macro_rules! serialize_fn {
 }
 
 pub struct SeqSerializer {
+    tag: Option<&'static str>,
     sequence: Vec<Value>
 }
 
 pub struct MapSerializer {
+    tag: Option<&'static str>,
     keys: Vec<String>,
     values: Vec<Value>
 }
@@ -124,16 +126,11 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
-        Ok(SeqSerializer {
-            sequence: len.map(Vec::with_capacity).unwrap_or_default()
-        })
+        Ok(SeqSerializer::new(None, len))
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
-        Ok(MapSerializer {
-            keys: len.map(Vec::with_capacity).unwrap_or_default(),
-            values: len.map(Vec::with_capacity).unwrap_or_default(),
-        })
+        Ok(MapSerializer::new(None, len))
     }
 
     fn serialize_struct(
@@ -141,17 +138,17 @@ impl Serializer for ValueSerializer {
         _name: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStruct> {
-        self.serialize_map(Some(len))
+        Ok(MapSerializer::new(None, Some(len)))
     }
 
     fn serialize_struct_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        self.serialize_map(Some(len))
+        Ok(MapSerializer::new(Some(variant), Some(len)))
     }
 
     fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok>
@@ -179,6 +176,16 @@ impl Serializer for ValueSerializer {
         value.serialize(self)
     }
 
+    fn serialize_newtype_variant<T: Serialize + ?Sized>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        value: &T,
+    ) -> Result<Self::Ok> {
+        Ok(crate::util::map![variant => value.serialize(self)?].into())
+    }
+
     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
         self.serialize_seq(Some(len))
     }
@@ -195,10 +202,10 @@ impl Serializer for ValueSerializer {
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        self.serialize_seq(Some(len))
+        Ok(SeqSerializer::new(Some(variant), Some(len)))
     }
 
     fn serialize_none(self) -> Result<Self::Ok> {
@@ -213,14 +220,14 @@ impl Serializer for ValueSerializer {
         self.serialize_unit()
     }
 
-    fn serialize_newtype_variant<T: Serialize + ?Sized>(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        _variant: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok> {
-        value.serialize(self)
+}
+
+impl SeqSerializer {
+    pub fn new(tag: Option<&'static str>, len: Option<usize>) -> Self {
+        Self {
+            tag,
+            sequence: len.map(Vec::with_capacity).unwrap_or_default(),
+        }
     }
 }
 
@@ -231,12 +238,15 @@ impl<'a> ser::SerializeSeq for SeqSerializer {
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
         where T: Serialize
     {
-        self.sequence.push(value.serialize(ValueSerializer)?);
-        Ok(())
+        Ok(self.sequence.push(value.serialize(ValueSerializer)?))
     }
 
     fn end(self) -> Result<Self::Ok> {
-        Ok(self.sequence.into())
+        let value: Value = self.sequence.into();
+        match self.tag {
+            Some(tag) => Ok(crate::util::map![tag => value].into()),
+            None => Ok(value)
+        }
     }
 }
 
@@ -286,6 +296,16 @@ impl<'a> ser::SerializeTupleVariant for SeqSerializer {
     }
 }
 
+impl MapSerializer {
+    pub fn new(tag: Option<&'static str>, len: Option<usize>) -> Self {
+        Self {
+            tag,
+            keys: len.map(Vec::with_capacity).unwrap_or_default(),
+            values: len.map(Vec::with_capacity).unwrap_or_default(),
+        }
+    }
+}
+
 impl<'a> ser::SerializeMap for MapSerializer {
     type Ok = Value;
     type Error = Error;
@@ -310,7 +330,11 @@ impl<'a> ser::SerializeMap for MapSerializer {
 
     fn end(self) -> Result<Self::Ok> {
         let iter = self.keys.into_iter().zip(self.values.into_iter());
-        Ok(iter.collect::<Dict>().into())
+        let value: Value = iter.collect::<Dict>().into();
+        match self.tag {
+            Some(tag) => Ok(crate::util::map![tag => value].into()),
+            None => Ok(value)
+        }
     }
 }
 

@@ -450,6 +450,7 @@ impl RelativePathBuf {
 /// assert_eq!(config.path_or_bytes, Either::Right(vec![3, 7, 13]));
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// #[serde(untagged)]
 // #[derive(Serialize)]
 pub enum Either<A, B> {
     /// The "left" variant.
@@ -1010,22 +1011,10 @@ mod _serde {
             {
                 match *self {
                     Either::Left(ref __field0) => {
-                        _serde::Serializer::serialize_newtype_variant(
-                            __serializer,
-                            "Either",
-                            0u32,
-                            "Left",
-                            __field0,
-                        )
+                        _serde::Serialize::serialize(__field0, __serializer)
                     }
                     Either::Right(ref __field0) => {
-                        _serde::Serializer::serialize_newtype_variant(
-                            __serializer,
-                            "Either",
-                            1u32,
-                            "Right",
-                            __field0,
-                        )
+                        _serde::Serialize::serialize(__field0, __serializer)
                     }
                 }
             }

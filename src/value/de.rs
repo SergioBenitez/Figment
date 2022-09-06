@@ -74,7 +74,6 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         result.map_err(|e| e.retagged(tag).resolved(config))
     }
 
-
     fn deserialize_enum<V: Visitor<'de>>(
         self,
         _: &'static str,
@@ -324,7 +323,6 @@ impl<'de> Deserializer<'de> for Empty {
         ignored_any unit_struct tuple_struct tuple option identifier
     }
 }
-
 
 /// Marker trait for "magic" values. Primarily for use with [`Either`].
 impl Value {
