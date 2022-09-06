@@ -42,7 +42,10 @@ fn string<'a>(input: &mut Input<'a>) -> Result<'a, String> {
 
 #[parser]
 fn key<'a>(input: &mut Input<'a>) -> Result<'a, String> {
-    Ok(take_some_while(is_ident_char)?.to_string())
+    switch! {
+        peek('"') => Ok(string()?),
+        _ => Ok(take_some_while(is_ident_char)?.to_string())
+    }
 }
 
 #[parser]
@@ -166,6 +169,8 @@ mod tests {
         assert_parse_eq! {
             "[1,2,3]" => vec![1u8, 2u8, 3u8],
             "{a=b}" => map!["a" => "b"],
+            "{\"a\"=b}" => map!["a" => "b"],
+            "{\"a.b.c\"=b}" => map!["a.b.c" => "b"],
             "{a=1,b=3}" => map!["a" => 1u8, "b" => 3u8],
             "{a=1,b=hi}" => map!["a" => v(1u8), "b" => v("hi")],
             "[1,[2],3]" => vec![v(1u8), v(vec![2u8]), v(3u8)],

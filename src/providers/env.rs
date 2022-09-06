@@ -29,8 +29,8 @@ crate::util::cloneable_fn_trait!(
 ///   * [`String`]: delimited by `"` (e.g, `APP_VAR=\"hi\"`)
 ///   * [`String`]: anything else (e.g, `APP_VAR=hi`, `APP_VAR=[hi`)
 ///
-/// Additionally, strings delimited with `"` can contain the following escaped
-/// characters:
+/// Additionally, keys and strings delimited with `"` can contain the following
+/// escaped characters:
 ///
 /// ```text
 /// \b         - backspace       (U+0008)
@@ -50,6 +50,9 @@ crate::util::cloneable_fn_trait!(
 /// APP_VAR=\"hello\\nthere\"  => (what in Rust is) "hello\nthere"
 /// APP_VAR=\"hi\\u1234there\" => (what in Rust is) "hi\u{1234}there"
 /// APP_VAR=\"abc\\td\\n\"     => (what in Rust is) "abc\td\n"
+///
+/// APP_VAR={\"key\\nkey\"=123}`)
+/// APP_VAR={\"key.key\"=123}`)
 /// ```
 ///
 /// Undelimited strings, or strings with invalid escape sequences, are
