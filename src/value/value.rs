@@ -243,13 +243,14 @@ impl Value {
             Num::U8(v) => v as u128,
             Num::U16(v) => v as u128,
             Num::U32(v) => v as u128,
+            Num::U64(v) => v as u128,
             Num::U128(v) => v as u128,
             Num::USize(v) => v as u128,
             _ => return None,
         })
     }
 
-    /// Converts `self` into a `u128` if `self` is an unsigned `Value::Num`
+    /// Converts `self` into an `i128` if `self` is an signed `Value::Num`
     /// variant.
     ///
     /// # Example
@@ -260,12 +261,16 @@ impl Value {
     /// let value: Value = 123i8.into();
     /// let converted = value.to_i128();
     /// assert_eq!(converted, Some(123));
+    ///
+    /// let value: Value = Value::from(5000i64);
+    /// assert_eq!(value.to_i128(), Some(5000i128));
     /// ```
     pub fn to_i128(&self) -> Option<i128> {
         Some(match self.to_num()? {
             Num::I8(v) => v as i128,
             Num::I16(v) => v as i128,
             Num::I32(v) => v as i128,
+            Num::I64(v) => v as i128,
             Num::I128(v) => v as i128,
             Num::ISize(v) => v as i128,
             _ => return None,
@@ -469,13 +474,14 @@ impl Num {
             Num::U8(v) => v as u128,
             Num::U16(v) => v as u128,
             Num::U32(v) => v as u128,
+            Num::U64(v) => v as u128,
             Num::U128(v) => v as u128,
             Num::USize(v) => v as u128,
             _ => return None,
         })
     }
 
-    /// Converts `self` into a `u128` if `self` is an unsigned `Value::Num`
+    /// Converts `self` into an `i128` if `self` is a signed `Value::Num`
     /// variant.
     ///
     /// # Example
@@ -491,6 +497,7 @@ impl Num {
             Num::I8(v) => v as i128,
             Num::I16(v) => v as i128,
             Num::I32(v) => v as i128,
+            Num::I64(v) => v as i128,
             Num::I128(v) => v as i128,
             Num::ISize(v) => v as i128,
             _ => return None,
