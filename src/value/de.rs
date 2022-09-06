@@ -100,6 +100,14 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         result.map_err(|e| e.retagged(tag).resolved(&config))
     }
 
+    fn deserialize_newtype_struct<V: Visitor<'de>>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value> {
+        visitor.visit_newtype_struct(self)
+    }
+
     fn is_human_readable(&self) -> bool {
         let val = self.readable.get();
         self.readable.set(!val);
@@ -108,7 +116,7 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
 
     serde::forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
-        string seq bytes byte_buf map unit newtype_struct
+        string seq bytes byte_buf map unit
         ignored_any unit_struct tuple_struct tuple identifier
     }
 }
@@ -247,9 +255,17 @@ impl<'de> Deserializer<'de> for &Value {
         result.map_err(|e: Error| e.retagged(self.tag()))
     }
 
+    fn deserialize_newtype_struct<V: Visitor<'de>>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value> {
+        visitor.visit_newtype_struct(self)
+    }
+
     serde::forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
-        string seq bytes byte_buf map unit struct newtype_struct
+        string seq bytes byte_buf map unit struct
         ignored_any unit_struct tuple_struct tuple identifier
     }
 }
