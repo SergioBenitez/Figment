@@ -315,18 +315,6 @@ pub trait Format: Sized {
     /// The name of the data format, for instance `"JSON"` or `"TOML"`.
     const NAME: &'static str;
 
-    /// Parses `string` as the data format `Self` as a `T` or returns an error
-    /// if the `string` is an invalid `T`.
-    fn from_str<'de, T: DeserializeOwned>(string: &'de str) -> Result<T, Self::Error>;
-
-    /// Parses the file at `path` as the data format `Self` as a `T` or returns
-    /// an error if the `string` is an invalid `T`. The default implementation
-    /// calls [`Format::from_str()`] with the contents of the file.
-    fn from_path<T: DeserializeOwned>(path: &Path) -> Result<T, Self::Error> {
-        let source = std::fs::read_to_string(path).map_err(de::Error::custom)?;
-        Self::from_str(&source)
-    }
-
     /// Returns a `Data` provider that sources its values by parsing the file at
     /// `path` as format `Self`. See [`Data::file()`] for more details. The
     /// default implementation calls `Data::file(path)`.
@@ -340,11 +328,29 @@ pub trait Format: Sized {
     fn string(string: &str) -> Data<Self> {
         Data::string(string)
     }
+
+    /// Parses `string` as the data format `Self` as a `T` or returns an error
+    /// if the `string` is an invalid `T`. **_Note:_** This method is _not_
+    /// intended to be called directly. Instead, it is intended to be
+    /// _implemented_ and then used indirectly via the [`Data::file()`] or
+    /// [`Data::string()`] methods.
+    fn from_str<'de, T: DeserializeOwned>(string: &'de str) -> Result<T, Self::Error>;
+
+    /// Parses the file at `path` as the data format `Self` as a `T` or returns
+    /// an error if the `string` is an invalid `T`. The default implementation
+    /// calls [`Format::from_str()`] with the contents of the file. **_Note:_**
+    /// This method is _not_ intended to be called directly. Instead, it is
+    /// intended to be _implemented on special occasions_ and then used
+    /// indirectly via the [`Data::file()`] or [`Data::string()`] methods.
+    fn from_path<T: DeserializeOwned>(path: &Path) -> Result<T, Self::Error> {
+        let source = std::fs::read_to_string(path).map_err(de::Error::custom)?;
+        Self::from_str(&source)
+    }
 }
 
 #[allow(unused_macros)]
 macro_rules! impl_format {
-    ($name:ident $NAME:literal/$string:literal: $func:path, $E:ty, $doc:expr) => (
+    ($name:ident $NAME:literal/$string:literal: $func:expr, $E:ty, $doc:expr) => (
         #[cfg(feature = $string)]
         #[cfg_attr(nightly, doc(cfg(feature = $string)))]
         #[doc = $doc]
@@ -362,7 +368,7 @@ macro_rules! impl_format {
         }
     );
 
-    ($name:ident $NAME:literal/$string:literal: $func:path, $E:ty) => (
+    ($name:ident $NAME:literal/$string:literal: $func:expr, $E:ty) => (
         impl_format!($name $NAME/$string: $func, $E, concat!(
             "A ", $NAME, " [`Format`] [`Data`] provider. See [`Data`] for details.",
             "\n```\n",
@@ -371,12 +377,42 @@ macro_rules! impl_format {
             "\nlet provider = ", stringify!($name), r#"::string("source-string");"#,
             "\n\n// Or read from a file on disk.",
             "\nlet provider = ", stringify!($name), r#"::file("path-to-file");"#,
+            "\n\n// Or configured as nested:",
+            "\nlet provider = ", stringify!($name), r#"::file("path-to-file").nested();"#,
             "\n```",
             "\n\nSee also [`", stringify!($func), "`] for parsing details."
         ));
     )
 }
 
+impl YamlExtended {
+    /// This "YAML Extended" format parser implements the draft ["Merge Key
+    /// Language-Independent Type for YAML™ Version
+    /// 1.1"](https://yaml.org/type/merge.html) spec via
+    /// [`serde_yaml::Value::apply_merge()`]. The extension is not part of any
+    /// official YAML release and is deprecated entirely since YAML 1.2. Using
+    /// `YamlExtended` instead of [`Yaml`] enables merge keys, allowing YAML
+    /// like the following to parse with key merges applied:
+    ///
+    /// ```yaml
+    /// tasks:
+    ///   build: &webpack_shared
+    ///     command: webpack
+    ///     args: build
+    ///     inputs:
+    ///       - 'src/**/*'
+    ///   start:
+    ///     <<: *webpack_shared
+    ///     args: start
+    /// ```
+    pub fn from_str<'de, T: DeserializeOwned>(s: &'de str) -> serde_yaml::Result<T> {
+        let mut value: serde_yaml::Value = serde_yaml::from_str(s)?;
+        value.apply_merge()?;
+        T::deserialize(value)
+    }
+}
+
 impl_format!(Toml "TOML"/"toml": toml::from_str, toml::de::Error);
 impl_format!(Yaml "YAML"/"yaml": serde_yaml::from_str, serde_yaml::Error);
 impl_format!(Json "JSON"/"json": serde_json::from_str, serde_json::error::Error);
+impl_format!(YamlExtended "YAML Extended"/"yaml": YamlExtended::from_str, serde_yaml::Error);
