@@ -389,6 +389,8 @@ macro_rules! impl_format {
     )
 }
 
+#[cfg(feature = "yaml")]
+#[cfg_attr(nightly, doc(cfg(feature = "yaml")))]
 impl YamlExtended {
     /// This "YAML Extended" format parser implements the draft ["Merge Key
     /// Language-Independent Type for YAML™ Version
