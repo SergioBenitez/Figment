@@ -51,6 +51,8 @@
 //!     they enable.
 //!   * [Built-In Providers](#built-in-providers) - Table of providers provided
 //!     by this crate.
+//!   * [Third-party Providers](#third-party-providers) - Table of providers provided
+//!     by other crates.
 //!   * [For `Provider` Authors](#for-provider-authors) - Tips for writing
 //!     [`Provider`]s.
 //!   * [For Library Authors](#for-library-authors) - Brief guide for authors
@@ -317,6 +319,12 @@
 //! [`Serialize`]: serde::Serialize
 //! [`(impl AsRef<str>, impl Serialize)`]: Provider#impl-Provider-for-(K%2C%20V)
 //! [`&T` _where_ `T: Provider`]: Provider#impl-Provider-for-%26%27_%20T
+//!
+//! # Third-Party Providers
+//!
+//!  - [`figment_file_provider_adapter`](https://crates.io/crates/figment_file_provider_adapter):
+//!    Wrapper for existing providers to allow loading values from files rather than
+//!    having the values inline in the config. Useful for secrets management.
 //!
 //! # For Provider Authors
 //!
