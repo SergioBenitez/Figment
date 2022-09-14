@@ -41,6 +41,13 @@ let config: Config = Figment::new()
 See the [documentation](https://docs.rs/figment) for a detailed usage guide and
 information.
 
+## Third-party providers
+
+Some custom functionality can be implemented as custom providers:
+ - [`figment_file_provider_adapter`](https://crates.io/crates/figment_file_provider_adapter):
+   Wrapper for existing providers to allow loading values from files rather than
+   having the values inline in the config. Useful for secrets management.
+
 ## Usage
 
 Add the following to your `Cargo.toml`, enabling the desired built-in providers:
