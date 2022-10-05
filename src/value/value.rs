@@ -239,15 +239,7 @@ impl Value {
     /// assert_eq!(converted, Some(123));
     /// ```
     pub fn to_u128(&self) -> Option<u128> {
-        Some(match self.to_num()? {
-            Num::U8(v) => v as u128,
-            Num::U16(v) => v as u128,
-            Num::U32(v) => v as u128,
-            Num::U64(v) => v as u128,
-            Num::U128(v) => v as u128,
-            Num::USize(v) => v as u128,
-            _ => return None,
-        })
+        self.to_num()?.to_u128()
     }
 
     /// Converts `self` into an `i128` if `self` is an signed `Value::Num`
@@ -266,15 +258,26 @@ impl Value {
     /// assert_eq!(value.to_i128(), Some(5000i128));
     /// ```
     pub fn to_i128(&self) -> Option<i128> {
-        Some(match self.to_num()? {
-            Num::I8(v) => v as i128,
-            Num::I16(v) => v as i128,
-            Num::I32(v) => v as i128,
-            Num::I64(v) => v as i128,
-            Num::I128(v) => v as i128,
-            Num::ISize(v) => v as i128,
-            _ => return None,
-        })
+        self.to_num()?.to_i128()
+    }
+
+    /// Converts `self` into an `f64` if `self` is either a [`Num::F32`] or
+    /// [`Num::F64`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Value;
+    ///
+    /// let value: Value = 7.0f32.into();
+    /// let converted = value.to_f64();
+    /// assert_eq!(converted, Some(7.0f64));
+    ///
+    /// let value: Value = Value::from(7.0f64);
+    /// assert_eq!(value.to_f64(), Some(7.0f64));
+    /// ```
+    pub fn to_f64(&self) -> Option<f64> {
+        self.to_num()?.to_f64()
     }
 
     /// Converts `self` into the corresponding [`Actual`].
@@ -500,6 +503,25 @@ impl Num {
             Num::I64(v) => v as i128,
             Num::I128(v) => v as i128,
             Num::ISize(v) => v as i128,
+            _ => return None,
+        })
+    }
+
+    /// Converts `self` into an `f64` if `self` is either a [`Num::F32`] or
+    /// [`Num::F64`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Num;
+    ///
+    /// let num: Num = 3.0f32.into();
+    /// assert_eq!(num.to_f64(), Some(3.0f64));
+    /// ```
+    pub fn to_f64(&self) -> Option<f64> {
+        Some(match *self {
+            Num::F32(v) => v as f64,
+            Num::F64(v) => v as f64,
             _ => return None,
         })
     }
