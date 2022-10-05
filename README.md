@@ -50,6 +50,18 @@ Add the following to your `Cargo.toml`, enabling the desired built-in providers:
 figment = { version = "0.10", features = ["toml", "env"] }
 ```
 
+#### Third-Party Providers
+
+The following external libraries implement Figment providers:
+
+ - [`figment_file_provider_adapter`](https://crates.io/crates/figment_file_provider_adapter)
+
+   Wraps existing providers. For any key ending in `_FILE` (configurable), emits
+   a key without the `_FILE` suffix with a value corresponding to the contents
+   of the file whose path is the original key's value.
+
+Please submit a pull request to add your library to this list.
+
 ## License
 
 Figment is licensed under either of the following, at your option:

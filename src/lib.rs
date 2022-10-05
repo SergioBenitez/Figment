@@ -49,8 +49,8 @@
 //!     "profiles", profile selection, nesting, and extraction.
 //!   * [Crate Feature Flags](#crate-feature-flags) - Feature flags and what
 //!     they enable.
-//!   * [Built-In Providers](#built-in-providers) - Table of providers provided
-//!     by this crate.
+//!   * [Available Providers](#available-providers) - Table of providers
+//!     provided by this and other crates.
 //!   * [For `Provider` Authors](#for-provider-authors) - Tips for writing
 //!     [`Provider`]s.
 //!   * [For Library Authors](#for-library-authors) - Brief guide for authors
@@ -303,7 +303,7 @@
 //!
 //! [YAML Extended]: providers::YamlExtended::from_str()
 //!
-//! # Built-In Providers
+//! # Available Providers
 //!
 //! In addition to the four gated providers above, figment provides the
 //! following providers out-of-the-box:
@@ -317,6 +317,16 @@
 //! [`Serialize`]: serde::Serialize
 //! [`(impl AsRef<str>, impl Serialize)`]: Provider#impl-Provider-for-(K%2C%20V)
 //! [`&T` _where_ `T: Provider`]: Provider#impl-Provider-for-%26%27_%20T
+//!
+//! ### Third-Party Providers
+//!
+//! The following external libraries implement Figment providers:
+//!
+//!  - [`figment_file_provider_adapter`](https://crates.io/crates/figment_file_provider_adapter)
+//!
+//!    Wraps existing providers. For any key ending in `_FILE` (configurable),
+//!    emits a key without the `_FILE` suffix with a value corresponding to the
+//!    contents of the file whose path is the original key's value.
 //!
 //! # For Provider Authors
 //!
