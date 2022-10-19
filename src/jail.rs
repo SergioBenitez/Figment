@@ -1,12 +1,12 @@
-use std::fs::File;
-use std::io::{Write, BufWriter};
-use std::path::{Path, PathBuf};
-use std::fmt::Display;
-use std::ffi::{OsStr, OsString};
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
+use std::fmt::Display;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 
-use tempfile::TempDir;
 use parking_lot::Mutex;
+use tempfile::TempDir;
 
 use crate::error::Result;
 
@@ -62,11 +62,24 @@ pub struct Jail {
     saved_cwd: PathBuf,
 }
 
-fn as_string<S: Display>(s: S) -> String { s.to_string() }
+fn as_string<S: Display>(s: S) -> String {
+    s.to_string()
+}
 
 static LOCK: Mutex<()> = parking_lot::const_mutex(());
 
 impl Jail {
+    pub fn new() -> Result<Self> {
+        let directory = TempDir::new().map_err(as_string)?;
+
+        Ok(Jail {
+            canonical_dir: directory.path().canonicalize().map_err(as_string)?,
+            _directory: directory,
+            saved_cwd: std::env::current_dir().map_err(as_string)?,
+            saved_env_vars: HashMap::new(),
+        })
+    }
+
     /// Creates a new jail that calls `f`, passing itself to `f`.
     ///
     /// # Panics
@@ -90,6 +103,18 @@ impl Jail {
         }
     }
 
+    /// An asynchronous version of `expect_with`.
+    #[track_caller]
+    pub async fn expect_with_async<F, Fut>(f: F)
+    where
+        F: FnOnce(&mut Jail) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        if let Err(e) = Jail::try_with_async(f).await {
+            panic!("jail failed: {}", e)
+        }
+    }
+
     /// Creates a new jail that calls `f`, passing itself to `f`. Returns the
     /// result from `f` if `f` does not panic.
     ///
@@ -109,16 +134,24 @@ impl Jail {
     #[track_caller]
     pub fn try_with<F: FnOnce(&mut Jail) -> Result<()>>(f: F) -> Result<()> {
         let _lock = LOCK.lock();
-        let directory = TempDir::new().map_err(as_string)?;
-        let mut jail = Jail {
-            canonical_dir: directory.path().canonicalize().map_err(as_string)?,
-            _directory: directory,
-            saved_cwd: std::env::current_dir().map_err(as_string)?,
-            saved_env_vars: HashMap::new(),
-        };
+        let mut jail = Jail::new()?;
 
         std::env::set_current_dir(jail.directory()).map_err(as_string)?;
         f(&mut jail)
+    }
+
+    /// An asynchronous version of `try_with`.
+    #[track_caller]
+    pub async fn try_with_async<F, Fut>(f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Jail) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        let _lock = LOCK.lock();
+        let mut jail = Jail::new()?;
+
+        std::env::set_current_dir(jail.directory()).map_err(as_string)?;
+        f(&mut jail).await
     }
 
     /// Returns the directory the jail has switched into. The contents of this
@@ -151,7 +184,9 @@ impl Jail {
     pub fn create_file<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
         let path = path.as_ref();
         if !path.is_relative() {
-            return Err("Jail::create_file(): file path is absolute".to_string().into());
+            return Err("Jail::create_file(): file path is absolute"
+                .to_string()
+                .into());
         }
 
         let file = File::create(self.directory().join(path)).map_err(as_string)?;
@@ -181,7 +216,8 @@ impl Jail {
     pub fn set_env<K: AsRef<str>, V: Display>(&mut self, k: K, v: V) {
         let key = k.as_ref();
         if !self.saved_env_vars.contains_key(OsStr::new(key)) {
-            self.saved_env_vars.insert(key.into(), std::env::var_os(key));
+            self.saved_env_vars
+                .insert(key.into(), std::env::var_os(key));
         }
 
         std::env::set_var(key, v.to_string());
@@ -193,7 +229,7 @@ impl Drop for Jail {
         for (key, value) in self.saved_env_vars.iter() {
             match value {
                 Some(val) => std::env::set_var(key, val),
-                None => std::env::remove_var(key)
+                None => std::env::remove_var(key),
             }
         }
 
