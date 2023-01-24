@@ -314,6 +314,16 @@
 //! | [`(impl AsRef<str>, impl Serialize)`] | Global source from a `("key", value)`. |
 //! | [`&T` _where_ `T: Provider`]          | Source from `T` as a reference.        |
 //!
+//! <small>
+//!
+//! Note: `key` in `(key, value)` is a _key path_, e.g. `"a"` or `"a.b.c"`,
+//! where the latter indicates a nested value `c` in `b` in `a`.
+//!
+//! See [`Figment#extraction`] and [Data
+//! (keyed)](providers::Serialized#provider-details) for key path details.
+//!
+//! </small>
+//!
 //! [`Serialize`]: serde::Serialize
 //! [`(impl AsRef<str>, impl Serialize)`]: Provider#impl-Provider-for-(K%2C%20V)
 //! [`&T` _where_ `T: Provider`]: Provider#impl-Provider-for-%26%27_%20T

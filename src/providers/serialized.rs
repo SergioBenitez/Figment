@@ -28,10 +28,11 @@ use crate::value::{Value, Map, Dict};
 ///
 ///     When keyed ([`Serialized::default()`], [`Serialized::global()`],
 ///     [`Serialized::key()`]), `T` can serialize to any [`Value`] and is
-///     emitted as the value of the configured `key`. Specifically, nested
+///     emitted as the value of the configured `key` key path. Nested
 ///     dictionaries are created for every path component delimited by `.` in
-///     the key string (3 in `a.b.c`), each dictionary mapping to its parent,
-///     and the serialized `T` mapping to the leaf.
+///     the `key` string, each dictionary mapping the path component to the
+///     child, with the leaf mapping to the serialized `T`. For instance,
+///     `a.b.c` results in `{ a: { b: { c: T }}}`.
 #[derive(Debug, Clone)]
 pub struct Serialized<T> {
     /// The value to be serialized and used as the provided data.
@@ -104,10 +105,12 @@ impl<T> Serialized<T> {
         Self::from(value, Profile::Global)
     }
 
-    /// Emits a nested dictionary to the `Default` profile keyed by `key` with
-    /// the final key mapping to `value`.
+    /// Emits a nested dictionary to the `Default` profile keyed by `key`
+    /// key path with the final key mapping to `value`.
     ///
-    /// Equivalent for `Serialized::from(value, Profile::Default).key(key)`.
+    /// See [Data (keyed)](#provider-details) for key path details.
+    ///
+    /// Equivalent to `Serialized::from(value, Profile::Default).key(key)`.
     ///
     /// See [`Serialized::from()`] and [`Serialized::key()`].
     #[track_caller]
@@ -117,6 +120,8 @@ impl<T> Serialized<T> {
 
     /// Emits a nested dictionary to the `Global` profile keyed by `key` with
     /// the final key mapping to `value`.
+    ///
+    /// See [Data (keyed)](#provider-details) for key path details.
     ///
     /// Equivalent to `Serialized::from(value, Profile::Global).key(key)`.
     ///
@@ -151,7 +156,9 @@ impl<T> Serialized<T> {
         self
     }
 
-    /// Sets the key to emit the serialized value to.
+    /// Sets the key path to emit the serialized value to.
+    ///
+    /// See [Data (keyed)](#provider-details) for key path details.
     ///
     /// ```rust
     /// use figment::{Figment, Jail, providers::Serialized};
