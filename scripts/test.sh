@@ -34,7 +34,7 @@ CARGO="cargo"
 # Ensures there are no tabs in any file.
 function ensure_tab_free() {
   local tab=$(printf '\t')
-  local matches=$(git grep -E -I "${tab}" "${PROJECT_ROOT}" | grep -v 'LICENSE')
+  local matches=$(git grep -PIn "${tab}" "${PROJECT_ROOT}" | grep -v 'LICENSE')
   if ! [ -z "${matches}" ]; then
     echo "Tab characters were found in the following:"
     echo "${matches}"
@@ -44,7 +44,7 @@ function ensure_tab_free() {
 
 # Ensures there are no files with trailing whitespace.
 function ensure_trailing_whitespace_free() {
-  local matches=$(git grep -E -I "\s+$" "${PROJECT_ROOT}" | grep -v -F '.stderr:')
+  local matches=$(git grep -PIn "\s+$" "${PROJECT_ROOT}" | grep -v -F '.stderr:')
   if ! [ -z "${matches}" ]; then
     echo "Trailing whitespace was found in the following:"
     echo "${matches}"
