@@ -36,7 +36,7 @@ atomic = "0.5.0"
 tempfile = "3"
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
-clap = { version = "3", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 
 [build-dependencies]
 version_check = "0.9"
