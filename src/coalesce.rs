@@ -6,6 +6,7 @@ pub enum Order {
     Merge,
     Join,
     Adjoin,
+    Admerge,
 }
 
 pub trait Coalescible: Sized {
@@ -17,7 +18,7 @@ impl Coalescible for Profile {
     fn coalesce(self, other: Self, order: Order) -> Self {
         match order {
             Order::Join | Order::Adjoin => self,
-            Order::Merge => other,
+            Order::Merge | Order::Admerge => other,
         }
     }
 }
@@ -26,9 +27,9 @@ impl Coalescible for Value {
     fn coalesce(self, other: Self, o: Order) -> Self {
         use {Value::Dict as D, Value::Array as A, Order::*};
         match (self, other, o) {
-            (D(t, a), D(_, b), Join | Adjoin) | (D(_, a), D(t, b), Merge) => D(t, a.coalesce(b, o)),
-            (A(t, mut a), A(_, b), Adjoin) => A(t, { a.extend(b); a }),
-            (v, _, Join | Adjoin) | (_, v, Merge) => v,
+            (D(t, a), D(_, b), Join | Adjoin) | (D(_, a), D(t, b), Merge | Admerge) => D(t, a.coalesce(b, o)),
+            (A(t, mut a), A(_, b), Adjoin | Admerge) => A(t, { a.extend(b); a }),
+            (v, _, Join | Adjoin) | (_, v, Merge | Admerge) => v,
         }
     }
 }
