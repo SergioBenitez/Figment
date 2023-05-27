@@ -210,49 +210,8 @@ impl Figment {
         self.provide(provider, Order::Join)
     }
 
-    /// Adjoins `provider` into the current figment. See [merging vs.
-    /// joining](#merging-vs-joining) for details.
-    ///
-    /// ```rust
-    /// use figment::Figment;
-    /// use figment::providers::Env;
-    /// use figment::util::map;
-    /// use figment::value::{Dict, Map};
-    ///
-    /// // With `adjoin`, arrays are concatened on conflict:
-    /// let figment = Figment::new()
-    ///     .join(("k", vec![1, 2, 3]))
-    ///     .join(("map", map!["inner" => vec!["hello"]]))
-    ///     .adjoin(("k", vec![4, 5]))
-    ///     .adjoin(("map", map!["inner" => vec!["world"]]));
-    ///
-    /// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
-    /// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
-    /// assert_eq!(vec, vec![1, 2, 3, 4, 5]);
-    /// assert_eq!(inner, vec!["hello", "world"]);
-    ///
-    /// // This is not the case with `join`, which takes the former value.
-    /// let figment = Figment::from(("k", vec![1, 2, 3]))
-    ///     .join(("map", map!["inner" => vec!["hello"]]))
-    ///     .join(("k", vec![4, 5]))
-    ///     .join(("map", map!["inner" => vec!["world"]]));
-    ///
-    /// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
-    /// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
-    /// assert_eq!(vec, vec![1, 2, 3]);
-    /// assert_eq!(inner, vec!["hello"]);
-    ///
-    /// // Nor `merge`, which takes the latter value.
-    /// let figment = Figment::from(("k", vec![1, 2, 3]))
-    ///     .join(("map", map!["inner" => vec!["hello"]]))
-    ///     .merge(("k", vec![4, 5]))
-    ///     .merge(("map", map!["inner" => vec!["world"]]));
-    ///
-    /// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
-    /// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
-    /// assert_eq!(vec, vec![4, 5]);
-    /// assert_eq!(inner, vec!["world"]);
-    /// ```
+    /// Joins `provider` into the current figment while concatenating vectors.
+    /// See [merging vs. joining](#merging-vs-joining) for details.
     #[track_caller]
     pub fn adjoin<T: Provider>(self, provider: T) -> Self {
         self.provide(provider, Order::Adjoin)
@@ -271,6 +230,13 @@ impl Figment {
     #[track_caller]
     pub fn merge<T: Provider>(self, provider: T) -> Self {
         self.provide(provider, Order::Merge)
+    }
+
+    /// Merges `provider` into the current figment while concatenating vectors.
+    /// See [merging vs. joining](#merging-vs-joining) for details.
+    #[track_caller]
+    pub fn admerge<T: Provider>(self, provider: T) -> Self {
+        self.provide(provider, Order::Admerge)
     }
 
     /// Sets the profile to extract from to `profile`.
