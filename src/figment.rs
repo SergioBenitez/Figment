@@ -21,10 +21,19 @@ use crate::coalesce::{Coalescible, Order};
 ///
 /// ## Merging vs. Joining
 ///
-/// _Merging_, _joining_, and _adjoining_ control whether duplicate values are
-/// replaced, discarded, or concatened. A _merged_ value replaces an existing
-/// value with the same key, while a _joined_ value is discarded if a value with
-/// the same key exists:
+/// _Merging_, _joining_, _admerging_ and _adjoining_ control whether duplicate
+/// values are replaced, discarded, or concatenated. A _merged_ value replaces
+/// an existing value with the same key, while a _joined_ value is discarded if
+/// a value with the same key exists.
+///
+/// | Method                 | Data type | Result              |
+/// | ---------------------- | --------- | ------------------- |
+/// | [`Figment::merge()`]   | Any       | Incoming value      |
+/// | [`Figment::join()`]    | Any       | Existing value      |
+/// | [`Figment::admerge()`] | Vector    | Concatenated values |
+/// | [`Figment::admerge()`] | Other     | Incoming value      |
+/// | [`Figment::adjoin()`]  | Vector    | Concatenated values |
+/// | [`Figment::adjoin()`]  | Other     | Existing value      |
 ///
 /// ```rust
 /// use figment::Figment;
@@ -43,8 +52,8 @@ use crate::coalesce::{Coalescible, Order};
 /// assert_eq!(joined, "replaced");
 /// ```
 ///
-/// Merging and joining operate recusrively on dictionaries. All other values,
-/// including vectors, are replaced or discarded:
+/// Merging and joining operate recursively on dictionaries. All other values,
+/// including vectors, are replaced when merging or discarded when joining.
 ///
 /// ```rust
 /// use figment::Figment;
@@ -66,8 +75,9 @@ use crate::coalesce::{Coalescible, Order};
 /// });
 /// ```
 ///
-/// With [`adjoin`](Figment::adjoin()), vectors are instead concatened when a
-/// conflict between two vectors arises:
+/// Admerge and adjoin are versions of merge and join, respectively, that
+/// differ from their counterparts in that they concatenate vectors. All other
+/// values are replaced or discarded as normal.
 ///
 /// ```rust
 /// use figment::Figment;
@@ -87,6 +97,67 @@ use crate::coalesce::{Coalescible, Order};
 ///     "inner".into() => vec!["hello".into(), "world".into()],
 ///     "other".into() => vec!["hi".into()],
 /// });
+/// ```
+///
+/// ```rust
+/// use figment::Figment;
+/// use figment::providers::Env;
+/// use figment::util::map;
+/// use figment::value::{Dict, Map};
+///
+/// // With `adjoin`, arrays are concatenated on conflict:
+/// let figment = Figment::from(("k", vec![1, 2, 3]))
+///     .join(("key", "value"))
+///     .join(("map", map!["inner" => vec!["hello"]]))
+///     .adjoin(("k", vec![4, 5]))
+///     .adjoin("key", "val")
+///     .adjoin(("map", map!["inner" => vec!["world"]]));
+///
+/// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
+/// let key: String = figment.extract_inner("key").unwrap();
+/// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
+/// assert_eq!(vec, vec![1, 2, 3, 4, 5]);
+/// assert_eq!(key, "value");
+/// assert_eq!(inner, vec!["hello", "world"]);
+///
+/// // With `adjoin`, arrays are concatenated on conflict:
+/// let figment = Figment::from(("k", vec![1, 2, 3]))
+///     .join(("key", "value"))
+///     .join(("map", map!["inner" => vec!["hello"]]))
+///     .admerge(("k", vec![4, 5]))
+///     .admerge("key", "val")
+///     .admerge(("map", map!["inner" => vec!["world"]]));
+///
+/// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
+/// let key: String = figment.extract_inner("key").unwrap();
+/// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
+/// assert_eq!(vec, vec![1, 2, 3, 4, 5]);
+/// assert_eq!(key, "val");
+/// assert_eq!(inner, vec!["hello", "world"]);
+///
+/// // This is not the case with `join`, which takes the former value.
+/// let figment = Figment::from(("k", vec![1, 2, 3]))
+///     .join(("key", "value"))
+///     .join(("map", map!["inner" => vec!["hello"]]))
+///     .join(("k", vec![4, 5]))
+///     .join(("map", map!["inner" => vec!["world"]]));
+///
+/// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
+/// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
+/// assert_eq!(vec, vec![1, 2, 3]);
+/// assert_eq!(inner, vec!["hello"]);
+///
+/// // Nor `merge`, which takes the latter value.
+/// let figment = Figment::from(("k", vec![1, 2, 3]))
+///     .join(("key", "value"))
+///     .join(("map", map!["inner" => vec!["hello"]]))
+///     .merge(("k", vec![4, 5]))
+///     .merge(("map", map!["inner" => vec!["world"]]));
+///
+/// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
+/// let inner: Vec<String> = figment.extract_inner("map.inner").unwrap();
+/// assert_eq!(vec, vec![4, 5]);
+/// assert_eq!(inner, vec!["world"]);
 /// ```
 ///
 /// ## Extraction
