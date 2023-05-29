@@ -110,7 +110,7 @@ use crate::coalesce::{Coalescible, Order};
 ///     .join(("key", "value"))
 ///     .join(("map", map!["inner" => vec!["hello"]]))
 ///     .adjoin(("k", vec![4, 5]))
-///     .adjoin("key", "val")
+///     .adjoin(("key", "val"))
 ///     .adjoin(("map", map!["inner" => vec!["world"]]));
 ///
 /// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
@@ -125,7 +125,7 @@ use crate::coalesce::{Coalescible, Order};
 ///     .join(("key", "value"))
 ///     .join(("map", map!["inner" => vec!["hello"]]))
 ///     .admerge(("k", vec![4, 5]))
-///     .admerge("key", "val")
+///     .admerge(("key", "val"))
 ///     .admerge(("map", map!["inner" => vec!["world"]]));
 ///
 /// let vec: Vec<u8> = figment.extract_inner("k").unwrap();
