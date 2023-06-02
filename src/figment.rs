@@ -19,33 +19,50 @@ use crate::coalesce::{Coalescible, Order};
 /// [`Figment::profile()`] and defaults to [`Profile::Default`]. The [top-level
 /// docs](crate) contain a broad overview of these topics.
 ///
-/// ## Combination strategies
+/// ## Conflict Resolution
 ///
-/// Figment supports four strategies for combining dictionaries, namely `join`,
-/// `adjoin`, `merge` and `admerge`. In all four strategies, the resulting
-/// dictionary is a union of key-value pairs from both dictionaries. The
-/// difference lies in how each strategy handles collisions.
+/// Conflicts arising from two providers providing values for the same key are
+/// resolved via one of four strategies: [`join`], [`adjoin`], [`merge`], and
+/// [`admerge`]. In general, `join` and `adjoin` prefer existing values while
+/// `merge` and `admerge` prefer later values. The `ad-` strategies additionally
+/// concatenate conflicting arrays whereas the non-`ad-` strategies treat arrays
+/// as non-composite values.
 ///
-/// If the colliding key is a dictionary, it will be merged with the same
-/// strategy as the current dictionary, in all four strategies.
+/// The table below summarizes these strategies and their behavior, with the
+/// column label referring to the type of the value pointed to by the
+/// conflicting keys:
 ///
-/// If the colliding key is an array,
-/// - `join` uses the existing value
-/// - `merge` uses the incoming value
-/// - `adjoin` and `admerge` use the concatenated value
+/// | Strategy    | Dictionaries   | Arrays        | All Others    |
+/// |-------------|----------------|---------------|---------------|
+/// | [`join`]    | Union, Recurse | Keep Existing | Keep Existing |
+/// | [`adjoin`]  | Union, Recurse | Concatenate   | Keep Existing |
+/// | [`merge`]   | Union, Recurse | Use Incoming  | Use Incoming  |
+/// | [`admerge`] | Union, Recurse | Concatenate   | Use Incoming  |
 ///
-/// If the colliding key is any non-composite type,
-/// - `join` and `adjoin` use the existing value
-/// - `merge` and `admerge` use the incoming value
+/// ### Description
 ///
-/// | Strategy                        | Dict behaviour       | Array behaviour    | Non-composite behaviour |
-/// | ------------------------------- | -------------------- | ------------------ | ----------------------- |
-/// | [`join`](Figment::join())       | Merge, same strategy | Keep existing      | Keep existing           |
-/// | [`adjoin`](Figment::adjoin())   | Merge, same strategy | Concatenate        | Keep existing           |
-/// | [`merge`](Figment::merge())     | Merge, same strategy | Overwrite with new | Overwrite with new      |
-/// | [`admerge`](Figment::admerge()) | Merge, same strategy | Concatenate        | Overwrite with new      |
+/// If both keys point to a **dictionary**, the dictionaries are always unioned,
+/// irrespective of the strategy, and conflict resolution proceeds recursively
+/// with each key in the union.
 ///
-/// Refer to the documentation of each strategy for examples.
+/// If both keys point to an **array**:
+///
+///   * `join` uses the existing value
+///   * `merge` uses the incoming value
+///   * `adjoin` and `admerge` concatenate the arrays
+///
+/// If both keys point to a **non-composite** (`String`, `Num`, etc.) or values
+/// of different kinds (i.e, **array** and **num**):
+///
+///   * `join` and `adjoin` use the existing value
+///   * `merge` and `admerge` use the incoming value
+///
+/// [`join`]: Figment::join()
+/// [`adjoin`]: Figment::adjoin()
+/// [`merge`]: Figment::merge()
+/// [`admerge`]: Figment::admerge()
+///
+/// For examples, refer to each strategy's documentation.
 ///
 /// ## Extraction
 ///
@@ -154,7 +171,7 @@ impl Figment {
     }
 
     /// Joins `provider` into the current figment.
-    /// See [combination strategies](#combination-strategies) for details.
+    /// See [conflict resolution](#conflict-resolution) for details.
     ///
     /// ```rust
     /// use figment::Figment;
@@ -195,7 +212,7 @@ impl Figment {
     }
 
     /// Joins `provider` into the current figment while concatenating vectors.
-    /// See [combination strategies](#combination-strategies) for details.
+    /// See [conflict resolution](#conflict-resolution) for details.
     ///
     /// ```rust
     /// use figment::Figment;
@@ -236,7 +253,7 @@ impl Figment {
     }
 
     /// Merges `provider` into the current figment.
-    /// See [combination strategies](#combination-strategies) for details.
+    /// See [conflict resolution](#conflict-resolution) for details.
     ///
     /// ```rust
     /// use figment::Figment;
@@ -277,7 +294,7 @@ impl Figment {
     }
 
     /// Merges `provider` into the current figment while concatenating vectors.
-    /// See [combination strategies](#combination-strategies) for details.
+    /// See [conflict resolution](#conflict-resolution) for details.
     ///
     /// ```rust
     /// use figment::Figment;
