@@ -23,14 +23,14 @@ test = ["tempfile", "parking_lot"]
 serde = { version = "1.0" }
 uncased = "0.9.3"
 pear = { version = "0.2", optional = true }
-toml = { version = "0.7", optional = true }
+toml = { version = "0.8", optional = true }
 serde_json = { version = "1.0", optional = true }
 serde_yaml = { version = "0.9", optional = true }
 tempfile = { version = "3", optional = true }
 parking_lot = { version = "0.12", optional = true }
 
 [target.'cfg(any(target_pointer_width = "8", target_pointer_width = "16", target_pointer_width = "32"))'.dependencies]
-atomic = "0.5.0"
+atomic = "0.6.0"
 
 [dev-dependencies]
 tempfile = "3"
