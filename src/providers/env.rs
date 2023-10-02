@@ -15,10 +15,11 @@ crate::util::cloneable_fn_trait!(
 /// A [`Provider`] that sources its values from environment variables.
 ///
 /// All key-lookups and comparisons are case insensitive, facilitated by the
-/// [`UncasedStr`] and [`Uncased`] types. Environment variable names are
-/// converted to lowercase before being emitted as [key paths] in the provided
-/// data. Environment variable values can contain structured data, parsed as a
-/// [`Value`], with syntax resembling TOML:
+/// [`UncasedStr`] and [`Uncased`] types. By default, environment variable names
+/// are lowercased before being emitted as [key paths] in the provided data, but
+/// this default can be changed with [`Env::lowercase()`]. Environment variable
+/// values can contain structured data, parsed as a [`Value`], with syntax
+/// resembling TOML:
 ///
 ///   * [`Bool`]: `true`, `false` (e.g, `APP_VAR=true`)
 ///   * [`Num::F64`]: any float containing `.`: (e.g, `APP_VAR=1.2`, `APP_VAR=-0.002`)
@@ -108,6 +109,8 @@ pub struct Env {
     pub profile: Profile,
     /// We use this to generate better metadata when available.
     prefix: Option<String>,
+    /// We use this to generate better metadata when available.
+    lowercase: bool,
 }
 
 impl fmt::Debug for Env {
@@ -117,10 +120,13 @@ impl fmt::Debug for Env {
 }
 
 impl Env {
-    fn new<F: Clone + 'static>(f: F) -> Self
-        where F: Fn(&UncasedStr) -> Option<Uncased>
-    {
-        Env { filter_map: Box::new(f), profile: Profile::Default, prefix: None }
+    fn new() -> Self {
+        Env {
+            filter_map: Box::new(|key| Some(key.into())),
+            profile: Profile::Default,
+            prefix: None,
+            lowercase: true,
+        }
     }
 
     fn chain<F: Clone + 'static>(self, f: F) -> Self
@@ -128,8 +134,10 @@ impl Env {
     {
         let filter_map = self.filter_map;
         Env {
-            filter_map: Box::new(move |key| f(filter_map(key))), profile: self.profile,
-            prefix: self.prefix
+            filter_map: Box::new(move |key| f(filter_map(key))),
+            profile: self.profile,
+            prefix: self.prefix,
+            lowercase: true,
         }
     }
 
@@ -159,8 +167,9 @@ impl Env {
     ///     Ok(())
     /// });
     /// ```
+    #[inline(always)]
     pub fn raw() -> Self {
-        Env::new(|key| Some(key.into()))
+        Env::new()
     }
 
     /// Return an `Env` provider that filters environment variables to those
@@ -188,10 +197,11 @@ impl Env {
     /// ```
     pub fn prefixed(prefix: &str) -> Self {
         let owned_prefix = prefix.to_string();
-        let mut env = Env::new(move |key| match key.starts_with(&owned_prefix) {
-            true => Some(key[owned_prefix.len()..].into()),
-            false => None
-        });
+        let mut env = Env::new()
+            .filter_map(move |key| match key.starts_with(&owned_prefix) {
+                true => Some(key[owned_prefix.len()..].into()),
+                false => None
+            });
 
         env.prefix = Some(prefix.into());
         env
@@ -257,9 +267,90 @@ impl Env {
     /// });
     /// ```
     pub fn map<F: Clone + 'static>(self, mapper: F) -> Self
-        where F: Fn(&UncasedStr) -> Uncased
+        where F: Fn(&UncasedStr) -> Uncased<'_>
     {
         self.chain(move |prev| prev.map(|v| mapper(&v).into_owned()))
+    }
+
+    /// Simultanously filters and maps the keys of environment variables being
+    /// considered.
+    ///
+    /// The returned `Env` only yields values for which `f` returns `Some`.
+    ///
+    /// ```rust
+    /// use std::collections::HashMap;
+    /// use figment::{Jail, providers::Env};
+    /// use uncased::AsUncased;
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     jail.clear_env();
+    ///     jail.set_env("FOO_FOO", 100);
+    ///     jail.set_env("BAR_BAR", "hi");
+    ///     jail.set_env("BAZ_BAZ", "200");
+    ///
+    ///     // We starts with all three variables in `Env::raw();
+    ///     let env = Env::raw();
+    ///     assert_eq!(env.iter().count(), 3);
+    ///
+    ///     // This is like `prefixed("foo_")` but with two prefixes.
+    ///     let env = env.filter_map(|k| {
+    ///         if k.starts_with("foo_") {
+    ///             Some(k["foo_".len()..].into())
+    ///         } else if k.starts_with("baz_") {
+    ///             Some(k["baz_".len()..].into())
+    ///         } else {
+    ///             None
+    ///         }
+    ///     });
+    ///
+    ///     // Now we have `FOO=100`, `BAZ="200"`.
+    ///     let values = env.iter().collect::<HashMap<_, _>>();
+    ///     assert_eq!(values.len(), 2);
+    ///     assert_eq!(values["foo".as_uncased()], "100");
+    ///     assert_eq!(values["baz".as_uncased()], "200");
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn filter_map<F: Clone + 'static>(self, f: F) -> Self
+        where F: Fn(&UncasedStr) -> Option<Uncased<'_>>
+    {
+        self.chain(move |prev| prev.and_then(|v| f(&v).map(|v| v.into_owned())))
+    }
+
+    /// Whether to lowercase keys before emitting them. Defaults to `true`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::collections::HashMap;
+    ///
+    /// use figment::{Jail, Profile, Provider};
+    /// use figment::providers::Env;
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     jail.clear_env();
+    ///     jail.set_env("FOO_BAR_BAZ", 1);
+    ///     jail.set_env("FOO_barBaz", 2);
+    ///
+    ///     // The default is to lower-case variable name keys.
+    ///     let env = Env::prefixed("FOO_");
+    ///     let data = env.data().unwrap();
+    ///     assert!(data[&Profile::Default].contains_key("bar_baz"));
+    ///     assert!(data[&Profile::Default].contains_key("barbaz"));
+    ///
+    ///     // This can be changed with `lowercase(false)`. You'll need to
+    ///     // arrange for deserialization to account for casing.
+    ///     let env = Env::prefixed("FOO_").lowercase(false);
+    ///     let data = env.data().unwrap();
+    ///     assert!(data[&Profile::Default].contains_key("BAR_BAZ"));
+    ///     assert!(data[&Profile::Default].contains_key("barBaz"));
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn lowercase(mut self, lowercase: bool) -> Self {
+        self.lowercase = lowercase;
+        self
     }
 
     /// Splits each environment variable key at `pattern`, creating nested
@@ -410,14 +501,20 @@ impl Env {
     ///     Ok(())
     /// });
     /// ```
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uncased, String)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uncased<'static>, String)> + 'a {
         std::env::vars_os()
             .filter(|(k, _)| !k.is_empty())
             .filter_map(move |(k, v)| {
-                let key = Uncased::from(k.to_string_lossy());
-                let key = (self.filter_map)(&key)?;
-                let key = key.as_str().trim().to_ascii_lowercase();
+                let key = k.to_string_lossy();
+                let key = (self.filter_map)(UncasedStr::new(key.trim()))?;
+                let key = key.as_str().trim();
                 if key.split('.').any(|s| s.is_empty()) { return None }
+
+                let key = match self.lowercase {
+                    true => key.to_ascii_lowercase(),
+                    false => key.to_owned(),
+                };
+
                 Some((key.into(), v.to_string_lossy().to_string()))
             })
     }

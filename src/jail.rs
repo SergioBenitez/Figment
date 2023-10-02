@@ -160,6 +160,46 @@ impl Jail {
         Ok(writer.into_inner().map_err(as_string)?)
     }
 
+    /// Remove all environment variables. All variables will be restored when
+    /// the jail is dropped.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let init_count = std::env::vars_os().count();
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     // We start with _something_ in the env vars.
+    ///     assert!(std::env::vars_os().count() != 0);
+    ///
+    ///     // Clear them all, and it's empty!
+    ///     jail.clear_env();
+    ///     assert!(std::env::vars_os().count() == 0);
+    ///
+    ///     // Set a value.
+    ///     jail.set_env("FIGMENT_SPECIAL_JAIL_VALUE", "value");
+    ///     assert!(std::env::vars_os().count() == 1);
+    ///
+    ///     // If we clear again, the new values are removed.
+    ///     jail.clear_env();
+    ///     assert!(std::env::vars_os().count() == 0);
+    ///
+    ///     Ok(())
+    /// });
+    ///
+    /// // After the drop, we have our original env vars.
+    /// assert!(std::env::vars_os().count() == init_count);
+    /// assert!(std::env::var("FIGMENT_SPECIAL_JAIL_VALUE").is_err());
+    /// ```
+    pub fn clear_env(&mut self) {
+        for (key, val) in std::env::vars_os() {
+            std::env::remove_var(&key);
+            if !self.saved_env_vars.contains_key(&key) {
+                self.saved_env_vars.insert(key, Some(val));
+            }
+        }
+    }
+
     /// Set the environment variable `k` to value `v`. The variable will be
     /// removed when the jail is dropped.
     ///
