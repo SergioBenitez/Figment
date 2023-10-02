@@ -574,6 +574,11 @@
 //!     error-prone.
 //!   * [`Error`] may contain more than one error: iterate over it to retrieve
 //!     all errors.
+//!   * Using `#[serde(flatten)]` [can break error attribution], so it's best to
+//!     avoid using it when possible.
+//!
+//! [can break error attribution]:
+//! https://github.com/SergioBenitez/Figment/issues/80#issuecomment-1701946622
 
 pub mod value;
 pub mod providers;
