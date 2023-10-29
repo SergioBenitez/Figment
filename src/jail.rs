@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{File, self};
 use std::io::{Write, BufWriter};
 use std::path::{Path, PathBuf};
 use std::fmt::Display;
@@ -158,6 +158,27 @@ impl Jail {
         let mut writer = BufWriter::new(file);
         writer.write_all(contents.as_bytes()).map_err(as_string)?;
         Ok(writer.into_inner().map_err(as_string)?)
+    }
+
+   /// Creates a file with contents `contents` in the jail's directory. The
+    /// file will be deleted with the jail is dropped.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_directory("subdir");
+    ///     jail.create_file("subdir/MyConfig.json", "contents...");
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn create_directory<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let path = path.as_ref();
+        if !path.is_relative() {
+            return Err("Jail::create_file(): file path is absolute".to_string().into());
+        }
+
+        Ok(fs::create_dir(self.directory().join(path)).map_err(as_string)?)
     }
 
     /// Remove all environment variables. All variables will be restored when
