@@ -137,14 +137,19 @@ impl Jail {
         &self.canonical_dir
     }
 
-    /// Creates a file with contents `contents` in the jail's directory. The
-    /// file will be deleted with the jail is dropped.
+    /// Creates a file with contents `contents` within the jail's directory. The
+    /// file is deleted when the jail is dropped.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if `path` is not relative. Any I/O errors
+    /// encountered while creating the file are returned.
     ///
     /// # Example
     ///
     /// ```rust
     /// figment::Jail::expect_with(|jail| {
-    ///     jail.create_file("MyConfig.json", "contents...");
+    ///     jail.create_file("MyConfig.json", "contents...")?;
     ///     Ok(())
     /// });
     /// ```
