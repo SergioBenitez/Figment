@@ -656,6 +656,7 @@ impl<T> From<T> for Tagged<T> {
 mod _serde {
     use super::*;
 
+    #[allow(unused_imports)]
     pub mod export {
         // These are re-reexports used by serde's codegen.
         pub use std::clone::Clone;
