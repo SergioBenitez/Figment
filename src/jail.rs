@@ -154,6 +154,11 @@ impl Jail {
     /// });
     /// ```
     pub fn create_file<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
+        self.create_file_raw(path, contents.as_bytes())
+    }
+
+    /// Same as [`create_file`], but with a non-utf8 content.
+    pub fn create_file_raw<P: AsRef<Path>>(&self, path: P, contents: &[u8]) -> Result<File> {
         let path = path.as_ref();
         if !path.is_relative() {
             return Err("Jail::create_file(): file path is absolute".to_string().into());
@@ -161,7 +166,7 @@ impl Jail {
 
         let file = File::create(self.directory().join(path)).map_err(as_string)?;
         let mut writer = BufWriter::new(file);
-        writer.write_all(contents.as_bytes()).map_err(as_string)?;
+        writer.write_all(contents).map_err(as_string)?;
         Ok(writer.into_inner().map_err(as_string)?)
     }
 
