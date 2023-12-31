@@ -594,7 +594,7 @@ mod provider;
 #[cfg(any(test, feature = "test"))] pub use jail::Jail;
 
 #[doc(inline)]
-pub use error::Error;
+pub use error::{Error, Result};
 pub use self::figment::Figment;
 pub use profile::Profile;
 pub use provider::*;
