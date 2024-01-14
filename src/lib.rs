@@ -292,14 +292,15 @@
 //! To help with compilation times, types, modules, and providers are gated by
 //! features. They are:
 //!
-//! | feature | gated namespace             | description                               |
-//! |---------|-----------------------------|-------------------------------------------|
-//! | `test`  | [`Jail`]                    | Semi-sandboxed environment for testing.   |
-//! | `env`   | [`providers::Env`]          | Environment variable [`Provider`].        |
-//! | `toml`  | [`providers::Toml`]         | TOML file/string [`Provider`].            |
-//! | `json`  | [`providers::Json`]         | JSON file/string [`Provider`].            |
-//! | `yaml`  | [`providers::Yaml`]         | YAML file/string [`Provider`].            |
-//! | `yaml`  | [`providers::YamlExtended`] | [YAML Extended] file/string [`Provider`]. |
+//! | feature          | gated namespace             | description                                                                |
+//! |------------------|-----------------------------|----------------------------------------------------------------------------|
+//! | `test`           | [`Jail`]                    | Semi-sandboxed environment for testing.                                    |
+//! | `env`            | [`providers::Env`]          | Environment variable [`Provider`].                                         |
+//! | `toml`           | [`providers::Toml`]         | TOML file/string [`Provider`].                                             |
+//! | `json`           | [`providers::Json`]         | JSON file/string [`Provider`].                                             |
+//! | `yaml`           | [`providers::Yaml`]         | YAML file/string [`Provider`].                                             |
+//! | `yaml`           | [`providers::YamlExtended`] | [YAML Extended] file/string [`Provider`].                                  |
+//! | `preserve_order` | nil                         | Preserve map order by using [IndexMap](https://github.com/bluss/indexmap). |
 //!
 //! [YAML Extended]: providers::YamlExtended::from_str()
 //!

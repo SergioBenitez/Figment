@@ -121,7 +121,10 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
     }
 }
 
+#[cfg(not(feature = "preserve_order"))]
 use std::collections::btree_map::Iter;
+#[cfg(feature = "preserve_order")]
+use indexmap::map::Iter;
 
 pub struct MapDe<'m, D, F: Fn(&'m Value) -> D> {
     iter: Iter<'m, String, Value>,

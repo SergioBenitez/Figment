@@ -1,13 +1,18 @@
 use std::str::Split;
-use std::collections::BTreeMap;
-
 use serde::Serialize;
+#[cfg(not(feature = "preserve_order"))]
+use std::collections::BTreeMap;
 
 use crate::value::{Tag, ValueSerializer};
 use crate::error::{Error, Actual};
 
 /// An alias to the type of map used in [`Value::Dict`].
+#[cfg(not(feature = "preserve_order"))]
 pub type Map<K, V> = BTreeMap<K, V>;
+
+/// An alias to the type of map used in [`Value::Dict`].
+#[cfg(feature = "preserve_order")]
+pub type Map<K, V> = indexmap::IndexMap<K, V>;
 
 /// An alias to a [`Map`] from `String` to [`Value`]s.
 pub type Dict = Map<String, Value>;
