@@ -4,7 +4,7 @@ use std::cell::Cell;
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, IntoDeserializer};
-use serde::de::{Visitor, SeqAccess, MapAccess};
+use serde::de::{Visitor, SeqAccess, MapAccess, VariantAccess};
 
 use crate::Figment;
 use crate::error::{Error, Kind, Result};
@@ -396,7 +396,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
     type Value = Value;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("a config value")
+        f.write_str("any valid figment value")
     }
 
     visit_fn!(visit_bool: bool => Value::Bool);
@@ -438,11 +438,11 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let mut raw_val: Option<RawValue> = None;
         while let Some(key) = map.next_key()? {
             if key == Value::FIELDS[0] {
-                id = Some(map.next_value().expect("value for key"));
+                id = Some(map.next_value()?);
             } else if key == Value::FIELDS[1] {
-                raw_val = Some(map.next_value().expect("value for key"));
+                raw_val = Some(map.next_value()?);
             }  else {
-                dict.insert(key, map.next_value().expect("value for key"));
+                dict.insert(key, map.next_value()?);
             }
         }
 
@@ -455,6 +455,11 @@ impl<'de> Visitor<'de> for ValueVisitor {
         }
 
         Ok(dict.into())
+    }
+
+    fn visit_enum<A: de::EnumAccess<'de>>(self, data: A) -> result::Result<Self::Value, A::Error> {
+        let (tag, variant) = data.variant::<String>()?;
+        Ok(crate::util::nest(&tag, variant.newtype_variant()?))
     }
 
     fn visit_none<E: de::Error>(self) -> result::Result<Self::Value, E> {
