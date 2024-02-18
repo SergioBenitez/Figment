@@ -78,6 +78,9 @@ impl<F: Format> Data<F> {
     /// the current working directory and all parent directories until the root,
     /// and the first hit is used.
     ///
+    /// (If you don't want want to search parent directories,
+    /// use [`file_exact()`](Data::file_exact) instead.)
+    ///
     /// Nesting is not enabled by default; use [`Data::nested()`] to enable
     /// nesting.
     ///
@@ -131,6 +134,19 @@ impl<F: Format> Data<F> {
         }
 
         Data::new(Source::File(find(path.as_ref())), Some(Profile::Default))
+    }
+
+    /// Returns a `Data` provider that sources its values by parsing the file at
+    /// `path` as format `F`. If `path` is relative, it is located relative
+    /// to the current working directory—no other directories are searched.
+    ///
+    /// (If you want to search parent directories, use [`file()`](Data::file)
+    /// instead.)
+    ///
+    /// Nesting is not enabled by default; use [`Data::nested()`] to enable
+    /// nesting.
+    pub fn file_exact<P:AsRef<Path>>(path: P) -> Self {
+	Data::new(Source::File(Some(path.as_ref().to_owned())), Some(Profile::Default))
     }
 
     /// Returns a `Data` provider that sources its values by parsing the string
@@ -320,6 +336,13 @@ pub trait Format: Sized {
     /// default implementation calls `Data::file(path)`.
     fn file<P: AsRef<Path>>(path: P) -> Data<Self> {
         Data::file(path)
+    }
+
+    /// Returns a `Data` provider that sources its values by parsing the file at
+    /// `path` as format `Self`. See [`Data::file_exact()`] for more details. The
+    /// default implementation calls `Data::file_exact(path)`.
+    fn file_exact<P: AsRef<Path>>(path: P) -> Data<Self> {
+        Data::file_exact(path)
     }
 
     /// Returns a `Data` provider that sources its values by parsing `string` as
