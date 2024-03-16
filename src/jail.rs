@@ -62,7 +62,28 @@ pub struct Jail {
     saved_cwd: PathBuf,
 }
 
+/// Convert a `T: Display` to a `String`.
 fn as_string<S: Display>(s: S) -> String { s.to_string() }
+
+/// Remove any dots from the path by popping as needed.
+fn dedot(path: &Path) -> PathBuf {
+    use std::path::Component::*;
+
+    let mut comps = vec![];
+    for component in path.components() {
+        match component {
+            p@Prefix(_) => comps = vec![p],
+            r@RootDir if comps.iter().all(|c| matches!(c, Prefix(_))) => comps.push(r),
+            r@RootDir => comps = vec![r],
+            CurDir => { },
+            ParentDir if comps.iter().all(|c| matches!(c, Prefix(_) | RootDir)) => { },
+            ParentDir => { comps.pop(); },
+            c@Normal(_) => comps.push(c),
+        }
+    }
+
+    comps.iter().map(|c| c.as_os_str()).collect()
+}
 
 static LOCK: Mutex<()> = parking_lot::const_mutex(());
 
@@ -138,7 +159,7 @@ impl Jail {
     }
 
     fn safe_jailed_path(&self, path: &Path) -> Result<PathBuf> {
-        let path = crate::util::dedot(path);
+        let path = dedot(path);
         if path.is_absolute() && path.starts_with(self.directory()) {
             return Ok(path);
         }
