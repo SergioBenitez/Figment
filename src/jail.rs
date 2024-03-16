@@ -156,8 +156,7 @@ impl Jail {
     /// # Errors
     ///
     /// An error is returned if `path` is not relative or is outside of the
-    /// jail's directory. Any I/O errors encountered while creating the
-    /// subdirectory are returned.
+    /// jail's directory. I/O errors while creating the file are returned.
     ///
     /// # Example
     ///
@@ -168,10 +167,30 @@ impl Jail {
     /// });
     /// ```
     pub fn create_file<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
+        self.create_binary(path.as_ref(), contents.as_bytes())
+    }
+
+    /// Creates a file with binary contents `bytes` within the jail's directory.
+    /// The file is deleted when the jail is dropped.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if `path` is not relative or is outside of the
+    /// jail's directory. I/O errors while creating the file are returned.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_binary("file.bin", &[0xFF, 0x4F, 0xFF, 0x51])?;
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn create_binary<P: AsRef<Path>>(&self, path: P, bytes: &[u8]) -> Result<File> {
         let path = self.safe_jailed_path(path.as_ref())?;
         let file = File::create(path).map_err(as_string)?;
         let mut writer = BufWriter::new(file);
-        writer.write_all(contents.as_bytes()).map_err(as_string)?;
+        writer.write_all(bytes).map_err(as_string)?;
         Ok(writer.into_inner().map_err(as_string)?)
     }
 
