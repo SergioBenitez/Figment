@@ -1,6 +1,6 @@
 [package]
 name = "figment"
-version = "0.10.14"
+version = "0.10.15"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 edition = "2018"
 documentation = "https://docs.rs/figment/0.10"
