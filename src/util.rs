@@ -239,6 +239,30 @@ pub mod vec_tuple_map {
     }
 }
 
+fn dedot_components<'c>(components: impl Iterator<Item = Component<'c>>) -> PathBuf {
+    use std::path::Component::*;
+
+    let mut comps = vec![];
+    for component in components {
+        match component {
+            p@Prefix(_) => comps = vec![p],
+            r@RootDir if comps.iter().all(|c| matches!(c, Prefix(_))) => comps.push(r),
+            r@RootDir => comps = vec![r],
+            CurDir => { },
+            ParentDir if comps.iter().all(|c| matches!(c, Prefix(_) | RootDir)) => { },
+            ParentDir => { comps.pop(); },
+            c@Normal(_) => comps.push(c),
+        }
+    }
+
+    comps.iter().map(|c| c.as_os_str()).collect()
+}
+
+/// Remove any dots from the path by popping as needed.
+pub(crate) fn dedot(path: &Path) -> PathBuf {
+    dedot_components(path.components())
+}
+
 use crate::value::{Value, Dict};
 
 /// Given a key path `key` of the form `a.b.c`, creates nested dictionaries for

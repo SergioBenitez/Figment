@@ -137,13 +137,27 @@ impl Jail {
         &self.canonical_dir
     }
 
+    fn safe_jailed_path(&self, path: &Path) -> Result<PathBuf> {
+        let path = crate::util::dedot(path);
+        if path.is_absolute() && path.starts_with(self.directory()) {
+            return Ok(path);
+        }
+
+        if !path.is_relative() {
+            return Err("Jail: input path is outside of jail directory".to_string().into());
+        }
+
+        Ok(path)
+    }
+
     /// Creates a file with contents `contents` within the jail's directory. The
     /// file is deleted when the jail is dropped.
     ///
     /// # Errors
     ///
-    /// An error is returned if `path` is not relative. Any I/O errors
-    /// encountered while creating the file are returned.
+    /// An error is returned if `path` is not relative or is outside of the
+    /// jail's directory. Any I/O errors encountered while creating the
+    /// subdirectory are returned.
     ///
     /// # Example
     ///
@@ -154,12 +168,8 @@ impl Jail {
     /// });
     /// ```
     pub fn create_file<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
-        let path = path.as_ref();
-        if !path.is_relative() {
-            return Err("Jail::create_file(): file path is absolute".to_string().into());
-        }
-
-        let file = File::create(self.directory().join(path)).map_err(as_string)?;
+        let path = self.safe_jailed_path(path.as_ref())?;
+        let file = File::create(path).map_err(as_string)?;
         let mut writer = BufWriter::new(file);
         writer.write_all(contents.as_bytes()).map_err(as_string)?;
         Ok(writer.into_inner().map_err(as_string)?)
@@ -174,8 +184,9 @@ impl Jail {
     ///
     /// # Errors
     ///
-    /// An error is returned if `path` is not relative. Any I/O errors
-    /// encountered while creating the subdirectory are returned.
+    /// An error is returned if `path` is not relative or is outside of the
+    /// jail's directory. Any I/O errors encountered while creating the
+    /// subdirectory are returned.
     ///
     /// # Example
     ///
@@ -185,24 +196,54 @@ impl Jail {
     /// figment::Jail::expect_with(|jail| {
     ///     let dir = jail.create_dir("subdir")?;
     ///     jail.create_file(dir.join("config.json"), "{ foo: 123 }")?;
-    ///     # assert_eq!(dir, Path::new("subdir"));
     ///
     ///     let dir = jail.create_dir("subdir/1/2")?;
     ///     jail.create_file(dir.join("secret.toml"), "secret = 1337")?;
-    ///     # assert_eq!(dir, Path::new("subdir/1/2"));
     ///
     ///     Ok(())
     /// });
     /// ```
     pub fn create_dir<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
-        let path = path.as_ref();
-        if !path.is_relative() {
-            return Err("Jail::create_dir(): dir path is absolute".to_string().into());
-        }
+        let path = self.safe_jailed_path(path.as_ref())?;
+        fs::create_dir_all(&path).map_err(as_string)?;
+        Ok(path)
+    }
 
-        let absolute_dir_path = self.directory().join(path);
-        fs::create_dir_all(&absolute_dir_path).map_err(as_string)?;
-        Ok(path.into())
+    /// Sets the jail's current working directory to `path` if `path` is within
+    /// [`Jail::directory()`]. Otherwise returns an error.
+    ///
+    /// # Errors
+    ///
+    /// An error is returned if `path` is not relative or is outside of the
+    /// jail's directory. Any I/O errors encountered while creating the
+    /// subdirectory are returned.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::path::Path;
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     assert_eq!(std::env::current_dir().unwrap(), jail.directory());
+    ///
+    ///     let subdir = jail.create_dir("subdir")?;
+    ///     jail.change_dir(&subdir)?;
+    ///     assert_eq!(std::env::current_dir().unwrap(), jail.directory().join(subdir));
+    ///
+    ///     let file = jail.create_file("foo.txt", "contents")?;
+    ///     assert!(!jail.directory().join("foo.txt").exists());
+    ///     assert!(jail.directory().join("subdir").join("foo.txt").exists());
+    ///
+    ///     jail.change_dir(jail.directory())?;
+    ///     assert_eq!(std::env::current_dir().unwrap(), jail.directory());
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn change_dir<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
+        let path = self.safe_jailed_path(path.as_ref())?;
+        std::env::set_current_dir(&path).map_err(as_string)?;
+        Ok(path)
     }
 
     /// Remove all environment variables. All variables will be restored when

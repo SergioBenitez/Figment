@@ -76,13 +76,10 @@ impl<F: Format> Data<F> {
     /// Returns a `Data` provider that sources its values by parsing the file at
     /// `path` as format `F`. If `path` is relative, the file is searched for in
     /// the current working directory and all parent directories until the root,
-    /// and the first hit is used.
+    /// and the first hit is used. If you don't want parent directories to be
+    /// searched, use [`Data::file_exact()`] instead.
     ///
-    /// (If you don't want want to search parent directories,
-    /// use [`file_exact()`](Data::file_exact) instead.)
-    ///
-    /// Nesting is not enabled by default; use [`Data::nested()`] to enable
-    /// nesting.
+    /// Nesting is disabled by default. Use [`Data::nested()`] to enable it.
     ///
     /// ```rust
     /// use serde::Deserialize;
@@ -137,16 +134,40 @@ impl<F: Format> Data<F> {
     }
 
     /// Returns a `Data` provider that sources its values by parsing the file at
-    /// `path` as format `F`. If `path` is relative, it is located relative
-    /// to the current working directory—no other directories are searched.
+    /// `path` as format `F`. If `path` is relative, it is located relative to
+    /// the current working directory. No other directories are searched.
     ///
-    /// (If you want to search parent directories, use [`file()`](Data::file)
-    /// instead.)
+    /// If you want to search parent directories for `path`, use
+    /// [`Data::file()`] instead.
     ///
-    /// Nesting is not enabled by default; use [`Data::nested()`] to enable
-    /// nesting.
-    pub fn file_exact<P:AsRef<Path>>(path: P) -> Self {
-	Data::new(Source::File(Some(path.as_ref().to_owned())), Some(Profile::Default))
+    /// Nesting is disabled by default. Use [`Data::nested()`] to enable it.
+    ///
+    /// ```rust
+    /// use serde::Deserialize;
+    /// use figment::{Figment, Jail, providers::{Format, Toml}};
+    ///
+    /// #[derive(Debug, PartialEq, Deserialize)]
+    /// struct Config {
+    ///     foo: usize,
+    /// }
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     // Create 'subdir/config.toml' and set `cwd = subdir`.
+    ///     jail.create_file("config.toml", "foo = 123")?;
+    ///     jail.change_dir(jail.create_dir("subdir")?)?;
+    ///
+    ///     // We are in `subdir`. `config.toml` is in `../`. `file()` finds it.
+    ///     let config = Figment::from(Toml::file("config.toml")).extract::<Config>()?;
+    ///     assert_eq!(config.foo, 123);
+    ///
+    ///     // `file_exact()` doesn't search, so it doesn't find it.
+    ///     let config = Figment::from(Toml::file_exact("config.toml")).extract::<Config>();
+    ///     assert!(config.is_err());
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn file_exact<P: AsRef<Path>>(path: P) -> Self {
+        Data::new(Source::File(Some(path.as_ref().to_owned())), Some(Profile::Default))
     }
 
     /// Returns a `Data` provider that sources its values by parsing the string
