@@ -1,4 +1,5 @@
 use std::str::Split;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use serde::Serialize;
@@ -278,6 +279,134 @@ impl Value {
     /// ```
     pub fn to_f64(&self) -> Option<f64> {
         self.to_num()?.to_f64()
+    }
+
+    /// Converts `self` to a `bool` if it is a Value::Bool,
+    /// or if it is a Value::String or a Value::Number with a
+    /// boolean interpretation.
+    ///
+    /// The case-insensitive strings "true", "yes", "1", and "on",
+    /// and the integer 1 are interpreted as true.
+    ///
+    /// The case-insensitive strings "false", "no", "0", and "off",
+    /// and the integer 0 are interpreted as false.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Value;
+    ///
+    /// let value = Value::from(true);
+    /// assert_eq!(value.to_flexible_bool(), Some(true));
+    ///
+    /// let value = Value::from(1);
+    /// assert_eq!(value.to_flexible_bool(), Some(true));
+    ///
+    /// let value = Value::from("YES");
+    /// assert_eq!(value.to_flexible_bool(), Some(true));
+    ///
+    /// let value = Value::from(false);
+    /// assert_eq!(value.to_flexible_bool(), Some(false));
+    ///
+    /// let value = Value::from(0);
+    /// assert_eq!(value.to_flexible_bool(), Some(false));
+    ///
+    /// let value = Value::from("no");
+    /// assert_eq!(value.to_flexible_bool(), Some(false));
+    ///
+    /// let value = Value::from("hello");
+    /// assert_eq!(value.to_flexible_bool(), None);
+    /// ```
+    pub fn to_flexible_bool(&self) -> Option<bool> {
+        match self {
+            Value::Bool(_, b) => Some(*b),
+            Value::Num(_, num) => {
+                match num.to_u128() {
+                    Some(1) => return Some(true),
+                    Some(0) => return Some(false),
+                    _ => {}
+                }
+                match num.to_i128() {
+                    Some(1) => Some(true),
+                    Some(0) => Some(false),
+                    _ => None,
+                }
+            }
+            Value::String(_, s) => match s.to_lowercase().as_ref() {
+                "true" | "yes" | "1" | "on" => Some(true),
+                "false" | "no" | "0" | "off" => Some(false),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// If `self` has a reasonable boolean interpretation,
+    /// convert it into a `Value::Bool`.
+    ///
+    /// See `to_flexible_bool` for more information about
+    /// interpreting values as booleans.
+    pub(crate) fn interpret_as_bool(&self) -> Cow<'_, Value> {
+        if let Some(b) = self.to_flexible_bool() {
+            Cow::Owned(Value::Bool(self.tag(), b))
+        } else {
+            Cow::Borrowed(self)
+        }
+    }
+
+    /// Converts `self` to a `Value::Num` if it is a Value::Num
+    /// or if it is a Value::String that represents a number.
+    ///
+    /// When parsing a string, returns the narrowest type that
+    /// can represent the provided number.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use figment::value::{Value, Num};
+    ///
+    /// let value = Value::from(7_i32);
+    /// assert_eq!(value.to_flexible_num(), Some(Num::I32(7)));
+    ///
+    /// let value = Value::from("7");
+    /// assert_eq!(value.to_flexible_num(), Some(Num::U8(7)));
+    ///
+    /// let value = Value::from("-7000");
+    /// assert_eq!(value.to_flexible_num(), Some(Num::I16(-7000)));
+    ///
+    /// let value = Value::from("7000.5");
+    /// assert_eq!(value.to_flexible_num(), Some(Num::F64(7000.5)));
+    /// ```
+    pub fn to_flexible_num(&self) -> Option<Num> {
+        use std::str::FromStr;
+        match self {
+            Value::Num(_, num) => Some(*num),
+            Value::String(_, s) => {
+                if let Ok(n) = u128::from_str(s) {
+                    Some(Num::from(n).compact().into())
+                } else if let Ok(n) = i128::from_str(s) {
+                    Some(Num::from(n).compact().into())
+                } else if let Ok(n) = f64::from_str(s) {
+                    Some(n.into())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// If `self` has a reasonable numeric interpretation,
+    /// convert it into a `Value::Num`.
+    ///
+    /// See `to_flexible_num` for more information about
+    /// interpreting values as numeric.
+    pub(crate) fn interpret_as_num(&self) -> Cow<'_, Value> {
+        if let Some(n) = self.to_flexible_num() {
+            Cow::Owned(Value::Num(self.tag(), n))
+        } else {
+            Cow::Borrowed(self)
+        }
     }
 
     /// Converts `self` into the corresponding [`Actual`].
@@ -562,6 +691,38 @@ impl Num {
             Num::F32(v) => Actual::Float(v as f64),
             Num::F64(v) => Actual::Float(v as f64),
         }
+    }
+
+    /// Given a number, return the narrowest representation of that number.
+    fn compact(&self) -> Self {
+        use std::convert::TryFrom;
+        macro_rules! try_convert {
+            ($n:expr => $($T:ty),*) => {$(
+                if let Ok(n) = <$T>::try_from($n) {
+                    return n.into();
+                }
+            )*}
+        }
+        if let Some(num) = self.to_i128() {
+            try_convert![num => i8, i16, i32, i64];
+            *self
+        } else if let Some(num) = self.to_u128() {
+            try_convert![num => u8, u16, u32, u64];
+            *self
+        } else {
+            *self
+        }
+    }
+
+    /// If `self` has a reasonable boolean interpretation,
+    /// convert it into a `Value::Bool`.
+    ///
+    /// Otherwise, convert it into a reasonable numberic value.
+    ///
+    /// See `to_flexible_bool` for more information about
+    /// interpreting values as booleans.
+    pub(crate) fn interpret_as_bool(&self) -> Value {
+        Value::from(*self).interpret_as_bool().into_owned()
     }
 }
 
