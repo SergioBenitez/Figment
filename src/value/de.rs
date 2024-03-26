@@ -1,6 +1,5 @@
 use std::fmt;
 use std::result;
-use std::borrow::Cow;
 use std::cell::Cell;
 
 use serde::Deserialize;
@@ -21,60 +20,21 @@ impl<'c> ConfiguredValueDe<'c> {
     pub fn from(config: &'c Figment, value: &'c Value) -> Self {
         Self { config, value, readable: Cell::from(true) }
     }
-
-    fn interpret_as_bool(&self) -> Cow<'_, Value> {
-        self.value.interpret_as_bool()
-    }
-    fn interpret_as_num(&self) -> Cow<'_, Value> {
-        self.value.interpret_as_num()
-    }
-    fn add_error_context(&self, e: Error) -> Error {
-        e.retagged(self.value.tag()).resolved(self.config)
-    }
 }
 
-/// Macro: Define `deserialize_bool` to use `self.interpret_as_bool`
-/// if possible before forwarding its result to `Value::deserialize_any`.
-///
-/// If `cvt_err` is provided, it is a method on self that is used to
-/// process any resulting Error before returning it.
-macro_rules! reinterpret_and_forward_bool {
-    { $($cvt_err:ident)? } =>
-    {
-        fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-            let value = self.interpret_as_bool();
-            let result = value.deserialize_any(visitor);
-            result $( .map_err(|e| self.$cvt_err(e)) )?
-        }
+/// Like [`serde::forward_to_deserialize_any`] but applies a closure first to
+/// `&self` and then calls `deserialize_any()` on the returned value.
+macro_rules! apply_then_forward_to_deserialize_any {
+    ( $( $($f:ident),+ => |$this:pat| $apply:expr),* $(,)? ) => {
+        $(
+            $(
+                fn $f<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+                    let value = { let $this = &self; $apply };
+                    value.deserialize_any(visitor)
+                }
+            )+
+        )*
     }
-}
-/// Macro: Define `deserialize_T` for all numeric T
-/// to use `self.interpret_as_num`
-/// if possible before forwarding its result to `Value::deserialize_any`.
-///
-/// If `cvt_err` is provided, it is a method on self that is used to
-/// process any resulting Error before returning it.
-macro_rules! reinterpret_and_forward_num {
-    { $($cvt_err:ident)? } =>
-    { reinterpret_and_forward_num!{
-        @imp ($($cvt_err)?)
-        deserialize_u8 deserialize_u16 deserialize_u32 deserialize_u64
-        deserialize_i8 deserialize_i16 deserialize_i32 deserialize_i64
-        deserialize_f32
-        deserialize_f64
-    }};
-    { @imp ($($cvt_err:ident)?) } => {};
-    { @imp ($($cvt_err:ident)?) $func:ident $($rest:tt)* } =>
-    {
-        fn $func<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-            let value = self.interpret_as_num();
-            let result = value.deserialize_any(visitor);
-            result $( .map_err(|e| self.$cvt_err(e)) )?
-        }
-        reinterpret_and_forward_num!{
-            @imp ($($cvt_err)?) $($rest)*
-        }
-    };
 }
 
 impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
@@ -169,11 +129,11 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         val
     }
 
-    reinterpret_and_forward_bool!{
-        add_error_context
-    }
-    reinterpret_and_forward_num!{
-        add_error_context
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool => |c| c.value.try_as_bool_lossy(),
+        deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
+        deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
+        deserialize_f32, deserialize_f64 => |c| c.value.try_as_num_lossy(),
     }
 
     serde::forward_to_deserialize_any! {
@@ -325,8 +285,12 @@ impl<'de> Deserializer<'de> for &Value {
         visitor.visit_newtype_struct(self)
     }
 
-    reinterpret_and_forward_bool!{}
-    reinterpret_and_forward_num!{}
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool => |v| v.try_as_bool_lossy(),
+        deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
+        deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
+        deserialize_f32, deserialize_f64 => |v| v.try_as_num_lossy(),
+    }
 
     serde::forward_to_deserialize_any! {
         char str
@@ -379,7 +343,9 @@ impl<'de> Deserializer<'de> for Num {
         }
     }
 
-    reinterpret_and_forward_bool!{}
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool => |&n| Value::from(n).try_as_bool_lossy().into_owned(),
+    }
 
     serde::forward_to_deserialize_any! {
         u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string seq enum
@@ -543,4 +509,3 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Empty::Unit.into())
     }
 }
-

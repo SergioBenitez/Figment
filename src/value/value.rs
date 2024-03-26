@@ -281,15 +281,14 @@ impl Value {
         self.to_num()?.to_f64()
     }
 
-    /// Converts `self` to a `bool` if it is a Value::Bool,
-    /// or if it is a Value::String or a Value::Number with a
-    /// boolean interpretation.
+    /// Converts `self` to a `bool` if it is a [`Value::Bool`], or if it is a
+    /// [`Value::String`] or a [`Value::Num`] with a boolean interpretation.
     ///
-    /// The case-insensitive strings "true", "yes", "1", and "on",
-    /// and the integer 1 are interpreted as true.
+    /// The case-insensitive strings "true", "yes", "1", and "on", and the
+    /// signed or unsigned integers `1` are interpreted as `true`.
     ///
-    /// The case-insensitive strings "false", "no", "0", and "off",
-    /// and the integer 0 are interpreted as false.
+    /// The case-insensitive strings "false", "no", "0", and "off", and the
+    /// signed or unsigned integers `0` are interpreted as false.
     ///
     /// # Example
     ///
@@ -297,68 +296,53 @@ impl Value {
     /// use figment::value::Value;
     ///
     /// let value = Value::from(true);
-    /// assert_eq!(value.to_flexible_bool(), Some(true));
+    /// assert_eq!(value.to_bool_lossy(), Some(true));
     ///
     /// let value = Value::from(1);
-    /// assert_eq!(value.to_flexible_bool(), Some(true));
+    /// assert_eq!(value.to_bool_lossy(), Some(true));
     ///
     /// let value = Value::from("YES");
-    /// assert_eq!(value.to_flexible_bool(), Some(true));
+    /// assert_eq!(value.to_bool_lossy(), Some(true));
     ///
     /// let value = Value::from(false);
-    /// assert_eq!(value.to_flexible_bool(), Some(false));
+    /// assert_eq!(value.to_bool_lossy(), Some(false));
     ///
     /// let value = Value::from(0);
-    /// assert_eq!(value.to_flexible_bool(), Some(false));
+    /// assert_eq!(value.to_bool_lossy(), Some(false));
     ///
     /// let value = Value::from("no");
-    /// assert_eq!(value.to_flexible_bool(), Some(false));
+    /// assert_eq!(value.to_bool_lossy(), Some(false));
     ///
     /// let value = Value::from("hello");
-    /// assert_eq!(value.to_flexible_bool(), None);
+    /// assert_eq!(value.to_bool_lossy(), None);
     /// ```
-    pub fn to_flexible_bool(&self) -> Option<bool> {
+    pub fn to_bool_lossy(&self) -> Option<bool> {
         match self {
             Value::Bool(_, b) => Some(*b),
-            Value::Num(_, num) => {
-                match num.to_u128() {
-                    Some(1) => return Some(true),
-                    Some(0) => return Some(false),
-                    _ => {}
-                }
-                match num.to_i128() {
-                    Some(1) => Some(true),
-                    Some(0) => Some(false),
-                    _ => None,
-                }
+            Value::Num(_, num) => match num.to_u128_lossy() {
+                Some(0) => Some(false),
+                Some(1) => Some(true),
+                _ => None
             }
-            Value::String(_, s) => match s.to_lowercase().as_ref() {
-                "true" | "yes" | "1" | "on" => Some(true),
-                "false" | "no" | "0" | "off" => Some(false),
-                _ => None,
+            Value::String(_, s) => {
+                const TRUE: &[&str] = &["true", "yes", "1", "on"];
+                const FALSE: &[&str] = &["false", "no", "0", "off"];
+
+                if TRUE.iter().any(|v| uncased::eq(v, s)) {
+                    Some(true)
+                } else if FALSE.iter().any(|v| uncased::eq(v, s)) {
+                    Some(false)
+                } else {
+                    None
+                }
             },
             _ => None,
         }
     }
 
-    /// If `self` has a reasonable boolean interpretation,
-    /// convert it into a `Value::Bool`.
-    ///
-    /// See `to_flexible_bool` for more information about
-    /// interpreting values as booleans.
-    pub(crate) fn interpret_as_bool(&self) -> Cow<'_, Value> {
-        if let Some(b) = self.to_flexible_bool() {
-            Cow::Owned(Value::Bool(self.tag(), b))
-        } else {
-            Cow::Borrowed(self)
-        }
-    }
-
-    /// Converts `self` to a `Value::Num` if it is a Value::Num
-    /// or if it is a Value::String that represents a number.
-    ///
-    /// When parsing a string, returns the narrowest type that
-    /// can represent the provided number.
+    /// Converts `self` to a [`Num`] if it is a [`Value::Num`] or if it is a
+    /// [`Value::String`] that parses as a `usize` ([`Num::USize`]), `isize`
+    /// ([`Num::ISize`]), or `f64` ([`Num::F64`]), in that order of precendence.
     ///
     /// # Examples
     ///
@@ -366,46 +350,32 @@ impl Value {
     /// use figment::value::{Value, Num};
     ///
     /// let value = Value::from(7_i32);
-    /// assert_eq!(value.to_flexible_num(), Some(Num::I32(7)));
+    /// assert_eq!(value.to_num_lossy(), Some(Num::I32(7)));
     ///
     /// let value = Value::from("7");
-    /// assert_eq!(value.to_flexible_num(), Some(Num::U8(7)));
+    /// assert_eq!(value.to_num_lossy(), Some(Num::U8(7)));
     ///
     /// let value = Value::from("-7000");
-    /// assert_eq!(value.to_flexible_num(), Some(Num::I16(-7000)));
+    /// assert_eq!(value.to_num_lossy(), Some(Num::I16(-7000)));
     ///
     /// let value = Value::from("7000.5");
-    /// assert_eq!(value.to_flexible_num(), Some(Num::F64(7000.5)));
+    /// assert_eq!(value.to_num_lossy(), Some(Num::F64(7000.5)));
     /// ```
-    pub fn to_flexible_num(&self) -> Option<Num> {
-        use std::str::FromStr;
+    pub fn to_num_lossy(&self) -> Option<Num> {
         match self {
             Value::Num(_, num) => Some(*num),
             Value::String(_, s) => {
-                if let Ok(n) = u128::from_str(s) {
-                    Some(Num::from(n).compact().into())
-                } else if let Ok(n) = i128::from_str(s) {
-                    Some(Num::from(n).compact().into())
-                } else if let Ok(n) = f64::from_str(s) {
+                if let Ok(n) = s.parse::<usize>() {
+                    Some(n.into())
+                } else if let Ok(n) = s.parse::<isize>() {
+                    Some(n.into())
+                } else if let Ok(n) = s.parse::<f64>() {
                     Some(n.into())
                 } else {
                     None
                 }
             }
             _ => None,
-        }
-    }
-
-    /// If `self` has a reasonable numeric interpretation,
-    /// convert it into a `Value::Num`.
-    ///
-    /// See `to_flexible_num` for more information about
-    /// interpreting values as numeric.
-    pub(crate) fn interpret_as_num(&self) -> Cow<'_, Value> {
-        if let Some(n) = self.to_flexible_num() {
-            Cow::Owned(Value::Num(self.tag(), n))
-        } else {
-            Cow::Borrowed(self)
         }
     }
 
@@ -431,6 +401,26 @@ impl Value {
             Value::Empty(_, e) => e.to_actual(),
             Value::Dict(_, _) => Actual::Map,
             Value::Array(_, _) => Actual::Seq,
+        }
+    }
+
+    /// If `self` has a lossy `bool` repr (using [`Value::to_bool_lossy()`]),
+    /// convert it into a `Value::Bool`. Otherwise leave it as is.
+    pub(crate) fn try_as_bool_lossy(&self) -> Cow<'_, Value> {
+        if let Some(b) = self.to_bool_lossy() {
+            Cow::Owned(Value::Bool(self.tag(), b))
+        } else {
+            Cow::Borrowed(self)
+        }
+    }
+
+    /// If `self` has a lossy `Num` repr (using [`Value::to_num_lossy()`]),
+    /// convert it into a `Value::Num`. Otherwise leave it as is.
+    pub(crate) fn try_as_num_lossy(&self) -> Cow<'_, Value> {
+        if let Some(n) = self.to_num_lossy() {
+            Cow::Owned(Value::Num(self.tag(), n))
+        } else {
+            Cow::Borrowed(self)
         }
     }
 
@@ -600,6 +590,9 @@ impl Num {
     ///
     /// let num: Num = 123u8.into();
     /// assert_eq!(num.to_u128(), Some(123));
+    ///
+    /// let num: Num = 123i8.into();
+    /// assert_eq!(num.to_u128(), None);
     /// ```
     pub fn to_u128(self) -> Option<u128> {
         Some(match self {
@@ -609,6 +602,38 @@ impl Num {
             Num::U64(v) => v as u128,
             Num::U128(v) => v as u128,
             Num::USize(v) => v as u128,
+            _ => return None,
+        })
+    }
+
+    /// Converts `self` into a `u128` if it is non-negative, even if `self` is
+    /// of a signed variant.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Num;
+    ///
+    /// let num: Num = 123u8.into();
+    /// assert_eq!(num.to_u128_lossy(), Some(123));
+    ///
+    /// let num: Num = 123i8.into();
+    /// assert_eq!(num.to_u128_lossy(), Some(123));
+    /// ```
+    pub fn to_u128_lossy(self) -> Option<u128> {
+        Some(match self {
+            Num::U8(v) => v as u128,
+            Num::U16(v) => v as u128,
+            Num::U32(v) => v as u128,
+            Num::U64(v) => v as u128,
+            Num::U128(v) => v as u128,
+            Num::USize(v) => v as u128,
+            Num::I8(v) if v >= 0 => v as u128,
+            Num::I16(v) if v >= 0 => v as u128,
+            Num::I32(v) if v >= 0 => v as u128,
+            Num::I64(v) if v >= 0 => v as u128,
+            Num::I128(v) if v >= 0 => v as u128,
+            Num::ISize(v) if v >= 0 => v as u128,
             _ => return None,
         })
     }
@@ -647,8 +672,8 @@ impl Num {
     /// let num: Num = 3.0f32.into();
     /// assert_eq!(num.to_f64(), Some(3.0f64));
     /// ```
-    pub fn to_f64(&self) -> Option<f64> {
-        Some(match *self {
+    pub fn to_f64(self) -> Option<f64> {
+        Some(match self {
             Num::F32(v) => v as f64,
             Num::F64(v) => v as f64,
             _ => return None,
@@ -674,8 +699,8 @@ impl Num {
     /// assert_eq!(Num::F32(2.5).to_actual(), Actual::Float(2.5));
     /// assert_eq!(Num::F64(2.103).to_actual(), Actual::Float(2.103));
     /// ```
-    pub fn to_actual(&self) -> Actual {
-        match *self {
+    pub fn to_actual(self) -> Actual {
+        match self {
             Num::U8(v) => Actual::Unsigned(v as u128),
             Num::U16(v) => Actual::Unsigned(v as u128),
             Num::U32(v) => Actual::Unsigned(v as u128),
@@ -693,37 +718,26 @@ impl Num {
         }
     }
 
-    /// Given a number, return the narrowest representation of that number.
-    fn compact(&self) -> Self {
-        use std::convert::TryFrom;
-        macro_rules! try_convert {
-            ($n:expr => $($T:ty),*) => {$(
-                if let Ok(n) = <$T>::try_from($n) {
-                    return n.into();
-                }
-            )*}
-        }
-        if let Some(num) = self.to_i128() {
-            try_convert![num => i8, i16, i32, i64];
-            *self
-        } else if let Some(num) = self.to_u128() {
-            try_convert![num => u8, u16, u32, u64];
-            *self
-        } else {
-            *self
-        }
-    }
-
-    /// If `self` has a reasonable boolean interpretation,
-    /// convert it into a `Value::Bool`.
-    ///
-    /// Otherwise, convert it into a reasonable numberic value.
-    ///
-    /// See `to_flexible_bool` for more information about
-    /// interpreting values as booleans.
-    pub(crate) fn interpret_as_bool(&self) -> Value {
-        Value::from(*self).interpret_as_bool().into_owned()
-    }
+    // /// Given a number, return the narrowest representation of that number.
+    // fn compact(self) -> Self {
+    //     use std::convert::TryFrom;
+    //
+    //     macro_rules! try_convert {
+    //         ($n:expr => $($T:ty),*) => {$(
+    //             if let Ok(n) = <$T>::try_from($n) {
+    //                 return n.into();
+    //             }
+    //         )*}
+    //     }
+    //
+    //     if let Some(num) = self.to_i128() {
+    //         try_convert![num => i8, i16, i32, i64];
+    //     } else if let Some(num) = self.to_u128() {
+    //         try_convert![num => u8, u16, u32, u64];
+    //     }
+    //
+    //     self
+    // }
 }
 
 impl PartialEq for Num {
