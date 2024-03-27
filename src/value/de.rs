@@ -23,14 +23,15 @@ impl<'c> ConfiguredValueDe<'c> {
 }
 
 /// Like [`serde::forward_to_deserialize_any`] but applies a closure first to
-/// `&self` and then calls `deserialize_any()` on the returned value.
+/// `&self`, calls `deserialize_any()` on the returned value, and finally maps
+/// any error produced using `$errmap`.
 macro_rules! apply_then_forward_to_deserialize_any {
-    ( $( $($f:ident),+ => |$this:pat| $apply:expr),* $(,)? ) => {
+    ( $( $($f:ident),+ => |$this:pat| $apply:expr, $errmap:expr),* $(,)? ) => {
         $(
             $(
                 fn $f<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-                    let value = { let $this = &self; $apply };
-                    value.deserialize_any(visitor)
+                    let $this = &self;
+                    $apply.deserialize_any(visitor).map_err($errmap)
                 }
             )+
         )*
@@ -130,10 +131,14 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
     }
 
     apply_then_forward_to_deserialize_any! {
-        deserialize_bool => |c| c.value.try_as_bool_lossy(),
+        deserialize_bool =>
+            |de| de.value.try_as_bool_lossy(),
+            |e| e.retagged(de.value.tag()).resolved(de.config),
         deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
         deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
-        deserialize_f32, deserialize_f64 => |c| c.value.try_as_num_lossy(),
+        deserialize_f32, deserialize_f64 =>
+            |de| de.value.try_as_num_lossy(),
+            |e| e.retagged(de.value.tag()).resolved(de.config),
     }
 
     serde::forward_to_deserialize_any! {
@@ -286,10 +291,10 @@ impl<'de> Deserializer<'de> for &Value {
     }
 
     apply_then_forward_to_deserialize_any! {
-        deserialize_bool => |v| v.try_as_bool_lossy(),
+        deserialize_bool => |v| v.try_as_bool_lossy(), |e| e.retagged(v.tag()),
         deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
         deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
-        deserialize_f32, deserialize_f64 => |v| v.try_as_num_lossy(),
+        deserialize_f32, deserialize_f64 => |v| v.try_as_num_lossy(), |e| e.retagged(v.tag()),
     }
 
     serde::forward_to_deserialize_any! {
@@ -344,7 +349,7 @@ impl<'de> Deserializer<'de> for Num {
     }
 
     apply_then_forward_to_deserialize_any! {
-        deserialize_bool => |&n| Value::from(n).try_as_bool_lossy().into_owned(),
+        deserialize_bool => |&n| Value::from(n).try_as_bool_lossy().into_owned(), |e| e,
     }
 
     serde::forward_to_deserialize_any! {
