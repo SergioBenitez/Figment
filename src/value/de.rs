@@ -22,6 +22,22 @@ impl<'c> ConfiguredValueDe<'c> {
     }
 }
 
+/// Like [`serde::forward_to_deserialize_any`] but applies a closure first to
+/// `&self`, calls `deserialize_any()` on the returned value, and finally maps
+/// any error produced using `$errmap`.
+macro_rules! apply_then_forward_to_deserialize_any {
+    ( $( $($f:ident),+ => |$this:pat| $apply:expr, $errmap:expr),* $(,)? ) => {
+        $(
+            $(
+                fn $f<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+                    let $this = &self;
+                    $apply.deserialize_any(visitor).map_err($errmap)
+                }
+            )+
+        )*
+    }
+}
+
 impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
     type Error = Error;
 
@@ -114,8 +130,19 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         val
     }
 
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool =>
+            |de| de.value.try_as_bool_lossy(),
+            |e| e.retagged(de.value.tag()).resolved(de.config),
+        deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
+        deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
+        deserialize_f32, deserialize_f64 =>
+            |de| de.value.try_as_num_lossy(),
+            |e| e.retagged(de.value.tag()).resolved(de.config),
+    }
+
     serde::forward_to_deserialize_any! {
-        bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
+        char str
         string seq bytes byte_buf map unit
         ignored_any unit_struct tuple_struct tuple identifier
     }
@@ -263,8 +290,15 @@ impl<'de> Deserializer<'de> for &Value {
         visitor.visit_newtype_struct(self)
     }
 
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool => |v| v.try_as_bool_lossy(), |e| e.retagged(v.tag()),
+        deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
+        deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
+        deserialize_f32, deserialize_f64 => |v| v.try_as_num_lossy(), |e| e.retagged(v.tag()),
+    }
+
     serde::forward_to_deserialize_any! {
-        bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
+        char str
         string seq bytes byte_buf map unit struct
         ignored_any unit_struct tuple_struct tuple identifier
     }
@@ -314,8 +348,12 @@ impl<'de> Deserializer<'de> for Num {
         }
     }
 
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool => |&n| Value::from(n).try_as_bool_lossy().into_owned(), |e| e,
+    }
+
     serde::forward_to_deserialize_any! {
-        bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string seq enum
+        u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string seq enum
         bytes byte_buf map struct unit newtype_struct
         ignored_any unit_struct tuple_struct tuple option identifier
     }
