@@ -1,11 +1,14 @@
-use std::str::Split;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::num::{ParseFloatError, ParseIntError};
+use std::str::{FromStr, Split};
 
 use serde::Serialize;
 
 use crate::value::{Tag, ValueSerializer};
 use crate::error::{Error, Actual};
+
+use super::magic::Either;
 
 /// An alias to the type of map used in [`Value::Dict`].
 pub type Map<K, V> = BTreeMap<K, V>;
@@ -364,17 +367,7 @@ impl Value {
     pub fn to_num_lossy(&self) -> Option<Num> {
         match self {
             Value::Num(_, num) => Some(*num),
-            Value::String(_, s) => {
-                if let Ok(n) = s.parse::<usize>() {
-                    Some(n.into())
-                } else if let Ok(n) = s.parse::<isize>() {
-                    Some(n.into())
-                } else if let Ok(n) = s.parse::<f64>() {
-                    Some(n.into())
-                } else {
-                    None
-                }
-            }
+            Value::String(_, s) => s.parse().ok(),
             _ => None,
         }
     }
@@ -717,32 +710,42 @@ impl Num {
             Num::F64(v) => Actual::Float(v as f64),
         }
     }
-
-    // /// Given a number, return the narrowest representation of that number.
-    // fn compact(self) -> Self {
-    //     use std::convert::TryFrom;
-    //
-    //     macro_rules! try_convert {
-    //         ($n:expr => $($T:ty),*) => {$(
-    //             if let Ok(n) = <$T>::try_from($n) {
-    //                 return n.into();
-    //             }
-    //         )*}
-    //     }
-    //
-    //     if let Some(num) = self.to_i128() {
-    //         try_convert![num => i8, i16, i32, i64];
-    //     } else if let Some(num) = self.to_u128() {
-    //         try_convert![num => u8, u16, u32, u64];
-    //     }
-    //
-    //     self
-    // }
 }
 
 impl PartialEq for Num {
     fn eq(&self, other: &Self) -> bool {
         self.to_actual() == other.to_actual()
+    }
+}
+
+macro_rules! try_convert {
+    ($n:expr => $($T:ty),*) => {$(
+        if let Ok(n) = <$T as std::convert::TryFrom<_>>::try_from($n) {
+            return Ok(n.into());
+        }
+    )*}
+}
+
+impl FromStr for Num {
+    type Err = Either<ParseIntError, ParseFloatError>;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        let string = string.trim();
+        if string.contains('.') {
+            if string.len() <= (f32::DIGITS as usize + 1) {
+                Ok(string.parse::<f32>().map_err(Either::Right)?.into())
+            } else {
+                Ok(string.parse::<f64>().map_err(Either::Right)?.into())
+            }
+        } else if string.starts_with('-') {
+            let int = string.parse::<i128>().map_err(Either::Left)?;
+            try_convert![int => i8, i16, i32, i64];
+            Ok(int.into())
+        } else {
+            let uint = string.parse::<u128>().map_err(Either::Left)?;
+            try_convert![uint => u8, u16, u32, u64];
+            Ok(uint.into())
+        }
     }
 }
 

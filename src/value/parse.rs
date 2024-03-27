@@ -3,7 +3,7 @@ use pear::combinators::*;
 use pear::macros::{parse, parser, switch};
 use pear::input::{Pear, Text};
 
-use crate::value::{Value, Dict, escape::escape};
+use crate::value::{Value, Num, Dict, escape::escape};
 
 type Input<'a> = Pear<Text<'a>>;
 type Result<'a, T> = pear::input::Result<T, Input<'a>>;
@@ -76,18 +76,9 @@ fn value<'a>(input: &mut Input<'a>) -> Result<'a, Value> {
         peek('\'') => Value::from((eat('\'')?, eat_any()?, eat('\'')?).1),
         _ => {
             let value = take_while(is_not_separator)?.trim();
-            if value.contains('.') {
-                if let Ok(float) = value.parse::<f64>() {
-                    return Ok(Value::from(float));
-                }
-            }
-
-            if let Ok(int) = value.parse::<usize>() {
-                Value::from(int)
-            } else if let Ok(int) = value.parse::<isize>() {
-                Value::from(int)
-            } else {
-                Value::from(value.to_string())
+            match value.parse::<Num>() {
+                Ok(num) => Value::from(num),
+                Err(_) => Value::from(value.to_string()),
             }
         }
     };
@@ -144,9 +135,10 @@ mod tests {
             "\" a\"" => " a",
             "\"a  \"" => "a  ",
             "\" a  \"" => " a  ",
-            "1.2" => 1.2,
-            "  1.2" => 1.2,
-            "3.14159" => 3.14159,
+            "1.2" => 1.2f32,
+            "  1.2" => 1.2f32,
+            "3.14159" => 3.14159f32,
+            "3.14159265359" => 3.14159265359f64,
             "\"\\t\"" => "\t",
             "\"abc\\td\"" => "abc\td",
             "\"abc\\td\\n\"" => "abc\td\n",
