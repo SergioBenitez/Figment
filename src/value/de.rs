@@ -1,28 +1,76 @@
 use std::fmt;
 use std::result;
 use std::cell::Cell;
+use std::marker::PhantomData;
+use std::borrow::Cow;
 
 use serde::Deserialize;
-use serde::de::{self, Deserializer, IntoDeserializer};
-use serde::de::{Visitor, SeqAccess, MapAccess, VariantAccess};
+use serde::de::{self, Deserializer, IntoDeserializer, Visitor};
+use serde::de::{SeqAccess, MapAccess, VariantAccess};
 
 use crate::Figment;
 use crate::error::{Error, Kind, Result};
 use crate::value::{Value, Num, Empty, Dict, Tag};
 
-pub struct ConfiguredValueDe<'c> {
-    pub config: &'c Figment,
-    pub value: &'c Value,
-    pub readable: Cell<bool>,
-}
+pub trait Interpreter {
+    fn interpret_as_bool(v: &Value) -> Cow<'_, Value> {
+        Cow::Borrowed(v)
+    }
 
-impl<'c> ConfiguredValueDe<'c> {
-    pub fn from(config: &'c Figment, value: &'c Value) -> Self {
-        Self { config, value, readable: Cell::from(true) }
+    fn interpret_as_num(v: &Value) -> Cow<'_, Value> {
+        Cow::Borrowed(v)
     }
 }
 
-impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
+pub struct DefaultInterpreter;
+impl Interpreter for DefaultInterpreter { }
+
+pub struct LossyInterpreter;
+impl Interpreter for LossyInterpreter {
+    fn interpret_as_bool(v: &Value) -> Cow<'_, Value> {
+        v.to_bool_lossy()
+            .map(|b| Cow::Owned(Value::Bool(v.tag(), b)))
+            .unwrap_or(Cow::Borrowed(v))
+    }
+
+    fn interpret_as_num(v: &Value) -> Cow<'_, Value> {
+        v.to_num_lossy()
+            .map(|n| Cow::Owned(Value::Num(v.tag(), n)))
+            .unwrap_or(Cow::Borrowed(v))
+    }
+}
+
+pub struct ConfiguredValueDe<'c, I = DefaultInterpreter> {
+    pub config: &'c Figment,
+    pub value: &'c Value,
+    pub readable: Cell<bool>,
+    _phantom: PhantomData<I>
+}
+
+impl<'c, I: Interpreter> ConfiguredValueDe<'c, I> {
+    pub fn from(config: &'c Figment, value: &'c Value) -> Self {
+        Self { config, value, readable: Cell::from(true), _phantom: PhantomData }
+    }
+}
+
+/// Like [`serde::forward_to_deserialize_any`] but applies `$apply` to
+/// `&self` first, then calls `deserialize_any()` on the returned value, and
+/// finally maps any error produced using `$errmap`:
+///   - $apply(&self).deserialize_any(visitor).map_err($errmap)
+macro_rules! apply_then_forward_to_deserialize_any {
+    ( $( $($f:ident),+ => |$this:pat| $apply:expr, $errmap:expr),* $(,)? ) => {
+        $(
+            $(
+                fn $f<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+                    let $this = &self;
+                    $apply.deserialize_any(visitor).map_err($errmap)
+                }
+            )+
+        )*
+    }
+}
+
+impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I> {
     type Error = Error;
 
     fn deserialize_any<V>(self, v: V) -> Result<V::Value>
@@ -114,8 +162,19 @@ impl<'de: 'c, 'c> Deserializer<'de> for ConfiguredValueDe<'c> {
         val
     }
 
+    apply_then_forward_to_deserialize_any! {
+        deserialize_bool =>
+            |de| I::interpret_as_bool(de.value),
+            |e| e.retagged(de.value.tag()).resolved(de.config),
+        deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
+        deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
+        deserialize_f32, deserialize_f64 =>
+            |de| I::interpret_as_num(de.value),
+            |e| e.retagged(de.value.tag()).resolved(de.config),
+    }
+
     serde::forward_to_deserialize_any! {
-        bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str
+        char str
         string seq bytes byte_buf map unit
         ignored_any unit_struct tuple_struct tuple identifier
     }
@@ -348,14 +407,14 @@ impl Value {
         "___figment_value_id", "___figment_value_value"
     ];
 
-    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>>(
-        de: ConfiguredValueDe<'c>,
+    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
+        de: ConfiguredValueDe<'c, I>,
         visitor: V
     ) -> Result<V::Value> {
         let mut map = Dict::new();
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), de.value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(de.config, v)))
+        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<'_, I>::from(de.config, v)))
     }
 }
 

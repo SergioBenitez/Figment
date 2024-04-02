@@ -1,9 +1,10 @@
-use std::str::Split;
 use std::collections::BTreeMap;
+use std::num::{ParseFloatError, ParseIntError};
+use std::str::{FromStr, Split};
 
 use serde::Serialize;
 
-use crate::value::{Tag, ValueSerializer};
+use crate::value::{Tag, ValueSerializer, magic::Either};
 use crate::error::{Error, Actual};
 
 /// An alias to the type of map used in [`Value::Dict`].
@@ -280,6 +281,94 @@ impl Value {
         self.to_num()?.to_f64()
     }
 
+    /// Converts `self` to a `bool` if it is a [`Value::Bool`], or if it is a
+    /// [`Value::String`] or a [`Value::Num`] with a boolean interpretation.
+    ///
+    /// The case-insensitive strings "true", "yes", "1", and "on", and the
+    /// signed or unsigned integers `1` are interpreted as `true`.
+    ///
+    /// The case-insensitive strings "false", "no", "0", and "off", and the
+    /// signed or unsigned integers `0` are interpreted as false.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Value;
+    ///
+    /// let value = Value::from(true);
+    /// assert_eq!(value.to_bool_lossy(), Some(true));
+    ///
+    /// let value = Value::from(1);
+    /// assert_eq!(value.to_bool_lossy(), Some(true));
+    ///
+    /// let value = Value::from("YES");
+    /// assert_eq!(value.to_bool_lossy(), Some(true));
+    ///
+    /// let value = Value::from(false);
+    /// assert_eq!(value.to_bool_lossy(), Some(false));
+    ///
+    /// let value = Value::from(0);
+    /// assert_eq!(value.to_bool_lossy(), Some(false));
+    ///
+    /// let value = Value::from("no");
+    /// assert_eq!(value.to_bool_lossy(), Some(false));
+    ///
+    /// let value = Value::from("hello");
+    /// assert_eq!(value.to_bool_lossy(), None);
+    /// ```
+    pub fn to_bool_lossy(&self) -> Option<bool> {
+        match self {
+            Value::Bool(_, b) => Some(*b),
+            Value::Num(_, num) => match num.to_u128_lossy() {
+                Some(0) => Some(false),
+                Some(1) => Some(true),
+                _ => None
+            }
+            Value::String(_, s) => {
+                const TRUE: &[&str] = &["true", "yes", "1", "on"];
+                const FALSE: &[&str] = &["false", "no", "0", "off"];
+
+                if TRUE.iter().any(|v| uncased::eq(v, s)) {
+                    Some(true)
+                } else if FALSE.iter().any(|v| uncased::eq(v, s)) {
+                    Some(false)
+                } else {
+                    None
+                }
+            },
+            _ => None,
+        }
+    }
+
+    /// Converts `self` to a [`Num`] if it is a [`Value::Num`] or if it is a
+    /// [`Value::String`] that parses as a `usize` ([`Num::USize`]), `isize`
+    /// ([`Num::ISize`]), or `f64` ([`Num::F64`]), in that order of precendence.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use figment::value::{Value, Num};
+    ///
+    /// let value = Value::from(7_i32);
+    /// assert_eq!(value.to_num_lossy(), Some(Num::I32(7)));
+    ///
+    /// let value = Value::from("7");
+    /// assert_eq!(value.to_num_lossy(), Some(Num::U8(7)));
+    ///
+    /// let value = Value::from("-7000");
+    /// assert_eq!(value.to_num_lossy(), Some(Num::I16(-7000)));
+    ///
+    /// let value = Value::from("7000.5");
+    /// assert_eq!(value.to_num_lossy(), Some(Num::F64(7000.5)));
+    /// ```
+    pub fn to_num_lossy(&self) -> Option<Num> {
+        match self {
+            Value::Num(_, num) => Some(*num),
+            Value::String(_, s) => s.parse().ok(),
+            _ => None,
+        }
+    }
+
     /// Converts `self` into the corresponding [`Actual`].
     ///
     /// See also [`Num::to_actual()`] and [`Empty::to_actual()`], which are
@@ -398,6 +487,37 @@ macro_rules! impl_from_for_value {
     )*)
 }
 
+macro_rules! try_convert {
+    ($n:expr => $($T:ty),*) => {$(
+        if let Ok(n) = <$T as std::convert::TryFrom<_>>::try_from($n) {
+            return Ok(n.into());
+        }
+    )*}
+}
+
+impl FromStr for Num {
+    type Err = Either<ParseIntError, ParseFloatError>;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        let string = string.trim();
+        if string.contains('.') {
+            if string.len() <= (f32::DIGITS as usize + 1) {
+                Ok(string.parse::<f32>().map_err(Either::Right)?.into())
+            } else {
+                Ok(string.parse::<f64>().map_err(Either::Right)?.into())
+            }
+        } else if string.starts_with('-') {
+            let int = string.parse::<i128>().map_err(Either::Left)?;
+            try_convert![int => i8, i16, i32, i64];
+            Ok(int.into())
+        } else {
+            let uint = string.parse::<u128>().map_err(Either::Left)?;
+            try_convert![uint => u8, u16, u32, u64];
+            Ok(uint.into())
+        }
+    }
+}
+
 impl_from_for_value! {
     String: String, char: Char, bool: Bool,
     u8: Num, u16: Num, u32: Num, u64: Num, u128: Num, usize: Num,
@@ -480,6 +600,38 @@ impl Num {
             Num::U64(v) => v as u128,
             Num::U128(v) => v as u128,
             Num::USize(v) => v as u128,
+            _ => return None,
+        })
+    }
+
+    /// Converts `self` into a `u128` if it is non-negative, even if `self` is
+    /// of a signed variant.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use figment::value::Num;
+    ///
+    /// let num: Num = 123u8.into();
+    /// assert_eq!(num.to_u128_lossy(), Some(123));
+    ///
+    /// let num: Num = 123i8.into();
+    /// assert_eq!(num.to_u128_lossy(), Some(123));
+    /// ```
+    pub fn to_u128_lossy(self) -> Option<u128> {
+        Some(match self {
+            Num::U8(v) => v as u128,
+            Num::U16(v) => v as u128,
+            Num::U32(v) => v as u128,
+            Num::U64(v) => v as u128,
+            Num::U128(v) => v as u128,
+            Num::USize(v) => v as u128,
+            Num::I8(v) if v >= 0 => v as u128,
+            Num::I16(v) if v >= 0 => v as u128,
+            Num::I32(v) if v >= 0 => v as u128,
+            Num::I64(v) if v >= 0 => v as u128,
+            Num::I128(v) if v >= 0 => v as u128,
+            Num::ISize(v) if v >= 0 => v as u128,
             _ => return None,
         })
     }

@@ -6,7 +6,7 @@ use std::path::{PathBuf, Path};
 
 use serde::{Deserialize, Serialize, de};
 
-use crate::{Error, value::{ConfiguredValueDe, MapDe, Tag}};
+use crate::{Error, value::{ConfiguredValueDe, Interpreter, MapDe, Tag}};
 
 /// Marker trait for "magic" values. Primarily for use with [`Either`].
 pub trait Magic: for<'de> Deserialize<'de> {
@@ -16,8 +16,8 @@ pub trait Magic: for<'de> Deserialize<'de> {
     /// The fields of the pseudo-structure. The last one should be the value.
     #[doc(hidden)] const FIELDS: &'static [&'static str];
 
-    #[doc(hidden)] fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>>(
-        de: ConfiguredValueDe<'c>,
+    #[doc(hidden)] fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
+        de: ConfiguredValueDe<'c, I>,
         visitor: V
     ) -> Result<V::Value, Error>;
 }
@@ -177,8 +177,8 @@ impl Magic for RelativePathBuf {
         "___figment_relative_path"
     ];
 
-    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>>(
-        de: ConfiguredValueDe<'c>,
+    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
+        de: ConfiguredValueDe<'c, I>,
         visitor: V
     ) -> Result<V::Value, Error> {
         // If we have this struct with a non-empty metadata_path, use it.
@@ -186,7 +186,8 @@ impl Magic for RelativePathBuf {
         if let Some(d) = de.value.as_dict() {
             if let Some(mpv) = d.get(Self::FIELDS[0]) {
                 if mpv.to_empty().is_none() {
-                    return visitor.visit_map(MapDe::new(d, |v| ConfiguredValueDe::from(config, v)));
+                    let map_de = MapDe::new(d, |v| ConfiguredValueDe::<I>::from(config, v));
+                    return visitor.visit_map(map_de);
                 }
             }
         }
@@ -204,7 +205,7 @@ impl Magic for RelativePathBuf {
         // If we have this struct with no metadata_path, still use the value.
         let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(&de.value);
         map.insert(Self::FIELDS[1].into(), value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
+        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(config, v)))
     }
 }
 
@@ -406,7 +407,7 @@ impl RelativePathBuf {
 //     ) -> Result<V::Value, Error>{
 //         let mut map = crate::value::Map::new();
 //         map.insert(Self::FIELDS[0].into(), de.config.profile().to_string().into());
-//         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(de.config, v)))
+//         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(de.config, v)))
 //     }
 // }
 //
@@ -572,8 +573,8 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         "___figment_tagged_tag" , "___figment_tagged_value"
     ];
 
-    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>>(
-        de: ConfiguredValueDe<'c>,
+    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
+        de: ConfiguredValueDe<'c, I>,
         visitor: V
     ) -> Result<V::Value, Error>{
         let config = de.config;
@@ -584,7 +585,7 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
             if let Some(tagv) = dict.get(Self::FIELDS[0]) {
                 if let Ok(false) = tagv.deserialize::<Tag>().map(|t| t.is_default()) {
                     return visitor.visit_map(MapDe::new(dict, |v| {
-                        ConfiguredValueDe::from(config, v)
+                        ConfiguredValueDe::<I>::from(config, v)
                     }));
                 }
             }
@@ -594,7 +595,7 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(&de.value);
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::from(config, v)))
+        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(config, v)))
     }
 }
 
