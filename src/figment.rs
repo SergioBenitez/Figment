@@ -4,7 +4,7 @@ use serde::de::Deserialize;
 
 use crate::{Profile, Provider, Metadata};
 use crate::error::{Kind, Result};
-use crate::value::{Value, Map, Dict, Tag, ConfiguredValueDe};
+use crate::value::{Value, Map, Dict, Tag, ConfiguredValueDe, DefaultInterpreter, LossyInterpreter};
 use crate::coalesce::{Coalescible, Order};
 
 /// Combiner of [`Provider`]s for configuration value extraction.
@@ -482,7 +482,64 @@ impl Figment {
     /// });
     /// ```
     pub fn extract<'a, T: Deserialize<'a>>(&self) -> Result<T> {
-        T::deserialize(ConfiguredValueDe::from(self, &self.merged()?))
+        let value = self.merged()?;
+        T::deserialize(ConfiguredValueDe::<'_, DefaultInterpreter>::from(self, &value))
+    }
+
+    /// As [`extract`](Figment::extract_lossy), but interpret numbers and
+    /// booleans more flexibly.
+    ///
+    /// See [`Value::to_bool_lossy`] and [`Value::to_num_lossy`] for a full
+    /// explanation of the imputs accepted.
+    ///
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use serde::Deserialize;
+    ///
+    /// use figment::{Figment, providers::{Format, Toml, Json, Env}};
+    ///
+    /// #[derive(Debug, PartialEq, Deserialize)]
+    /// struct Config {
+    ///     name: String,
+    ///     numbers: Option<Vec<usize>>,
+    ///     debug: bool,
+    /// }
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_file("Config.toml", r#"
+    ///         name = "test"
+    ///         numbers = ["1", "2", "3", "10"]
+    ///     "#)?;
+    ///
+    ///     jail.set_env("config_name", "env-test");
+    ///
+    ///     jail.create_file("Config.json", r#"
+    ///         {
+    ///             "name": "json-test",
+    ///             "debug": "yes"
+    ///         }
+    ///     "#)?;
+    ///
+    ///     let config: Config = Figment::new()
+    ///         .merge(Toml::file("Config.toml"))
+    ///         .merge(Env::prefixed("CONFIG_"))
+    ///         .join(Json::file("Config.json"))
+    ///         .extract_lossy()?;
+    ///
+    ///     assert_eq!(config, Config {
+    ///         name: "env-test".into(),
+    ///         numbers: vec![1, 2, 3, 10].into(),
+    ///         debug: true
+    ///     });
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn extract_lossy<'a, T: Deserialize<'a>>(&self) -> Result<T> {
+        let value = self.merged()?;
+        T::deserialize(ConfiguredValueDe::<'_, LossyInterpreter>::from(self, &value))
     }
 
     /// Deserializes the value at the `key` path in the collected value into
@@ -511,8 +568,43 @@ impl Figment {
     /// });
     /// ```
     pub fn extract_inner<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
-        T::deserialize(ConfiguredValueDe::from(self, &self.find_value(path)?))
-            .map_err(|e| e.with_path(path))
+        let value = self.find_value(path)?;
+        let de = ConfiguredValueDe::<'_, DefaultInterpreter>::from(self, &value);
+        T::deserialize(de).map_err(|e| e.with_path(path))
+    }
+
+    /// As [`extract`](Figment::extract_lossy), but interpret numbers and
+    /// booleans more flexibly.
+    ///
+    /// See [`Value::to_bool_lossy`] and [`Value::to_num_lossy`] for a full
+    /// explanation of the imputs accepted.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use figment::{Figment, providers::{Format, Toml, Json}};
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_file("Config.toml", r#"
+    ///         numbers = ["1", "2", "3", "10"]
+    ///     "#)?;
+    ///
+    ///     jail.create_file("Config.json", r#"{ "debug": true } "#)?;
+    ///
+    ///     let numbers: Vec<usize> = Figment::new()
+    ///         .merge(Toml::file("Config.toml"))
+    ///         .join(Json::file("Config.json"))
+    ///         .extract_inner_lossy("numbers")?;
+    ///
+    ///     assert_eq!(numbers, vec![1, 2, 3, 10]);
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn extract_inner_lossy<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
+        let value = self.find_value(path)?;
+        let de = ConfiguredValueDe::<'_, LossyInterpreter>::from(self, &value);
+        T::deserialize(de).map_err(|e| e.with_path(path))
     }
 
     /// Returns an iterator over the metadata for all of the collected values in
