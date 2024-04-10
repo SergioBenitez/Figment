@@ -23,15 +23,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// Broadly, there are two ways to construct an `Error`:
 ///
-///   * Via an error message, since `Error` impls `From<String>`:
+///   * With an error message, as `Error` impls `From<String>` and `From<&str>`:
 ///
 ///     ```
 ///     use figment::Error;
 ///
-///     Error::from("whoops, something went wrong!".to_string());
+///     Error::from(format!("{} is invalid", 1));
+///
+///     Error::from("whoops, something went wrong!");
 ///     ```
 ///
-///   * Via a [`Kind`], since `Error` impls `From<Kind>`:
+///   * With a [`Kind`], as `Error` impls `From<Kind>`:
 ///
 ///     ```
 ///     use figment::{error::{Error, Kind}, value::Value};
@@ -144,11 +146,6 @@ impl Error {
         self
     }
 
-    pub(crate) fn chain(self, mut error: Error) -> Self {
-        error.prev = Some(Box::new(self));
-        error
-    }
-
     pub(crate) fn retagged(mut self, tag: Tag) -> Self {
         if self.tag.is_default() {
             self.tag = tag;
@@ -199,6 +196,39 @@ impl Error {
     pub fn with_path(mut self, path: &str) -> Self {
         self.path.push(path.into());
         self
+    }
+
+    /// Prepends `self` to `error` and returns `error`.
+    ///
+    /// ```rust
+    /// use figment::error::Error;
+    ///
+    /// let e1 = Error::from("1");
+    /// let e2 = Error::from("2");
+    /// let e3 = Error::from("3");
+    ///
+    /// let error = e1.chain(e2).chain(e3);
+    /// assert_eq!(error.count(), 3);
+    ///
+    /// let unchained = error.into_iter()
+    ///     .map(|e| e.to_string())
+    ///     .collect::<Vec<_>>();
+    /// assert_eq!(unchained, vec!["3", "2", "1"]);
+    ///
+    /// let e1 = Error::from("1");
+    /// let e2 = Error::from("2");
+    /// let e3 = Error::from("3");
+    /// let error = e3.chain(e2).chain(e1);
+    /// assert_eq!(error.count(), 3);
+    ///
+    /// let unchained = error.into_iter()
+    ///     .map(|e| e.to_string())
+    ///     .collect::<Vec<_>>();
+    /// assert_eq!(unchained, vec!["1", "2", "3"]);
+    /// ```
+    pub fn chain(self, mut error: Error) -> Self {
+        error.prev = Some(Box::new(self));
+        error
     }
 
     /// Returns the number of errors represented by `self`.
@@ -383,6 +413,12 @@ impl From<Kind> for Error {
             prev: None,
             kind,
         }
+    }
+}
+
+impl From<&str> for Error {
+    fn from(string: &str) -> Error {
+        Kind::Message(string.into()).into()
     }
 }
 
