@@ -141,8 +141,8 @@ pub enum Kind {
 }
 
 impl Error {
-    pub(crate) fn prefixed(mut self, path: &str) -> Self {
-        self.path.insert(0, path.into());
+    pub(crate) fn prefixed(mut self, key: &str) -> Self {
+        self.path.insert(0, key.into());
         self
     }
 
@@ -190,11 +190,18 @@ impl Error {
     /// ```rust
     /// use figment::Error;
     ///
-    /// let error = Error::from("an error message".to_string())
-    ///     .with_path("some_path");
+    /// let error = Error::from("an error message").with_path("some_path");
+    /// assert_eq!(error.path, vec!["some_path"]);
+    ///
+    /// let error = Error::from("an error message").with_path("some.path");
+    /// assert_eq!(error.path, vec!["some", "path"]);
     /// ```
     pub fn with_path(mut self, path: &str) -> Self {
-        self.path.push(path.into());
+        let paths = path.split('.')
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string());
+
+        self.path.extend(paths);
         self
     }
 

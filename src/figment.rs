@@ -510,8 +510,9 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn extract_inner<'a, T: Deserialize<'a>>(&self, key: &str) -> Result<T> {
-        T::deserialize(ConfiguredValueDe::from(self, &self.find_value(key)?))
+    pub fn extract_inner<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
+        T::deserialize(ConfiguredValueDe::from(self, &self.find_value(path)?))
+            .map_err(|e| e.with_path(path))
     }
 
     /// Returns an iterator over the metadata for all of the collected values in
@@ -600,8 +601,14 @@ impl Figment {
             .flatten()
     }
 
-    /// Finds the value at `key` path in the combined value. See
-    /// [`Value::find()`] for details on the syntax for `key`.
+    /// Finds the value at `path` in the combined value.
+    ///
+    /// If there is an error evaluating the combined figment, that error is
+    /// returned. Otherwise if there is a value at `path`, returns `Ok(value)`,
+    /// and if there is no value at `path`, returns `Err` of kind
+    /// `MissingField`.
+    ///
+    /// See [`Value::find()`] for details on the syntax for `path`.
     ///
     /// # Example
     ///
@@ -640,10 +647,53 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn find_value(&self, key: &str) -> Result<Value> {
+    pub fn find_value(&self, path: &str) -> Result<Value> {
         self.merged()?
-            .find(key)
-            .ok_or_else(|| Kind::MissingField(key.to_string().into()).into())
+            .find(path)
+            .ok_or_else(|| Kind::MissingField(path.to_string().into()).into())
+    }
+
+    /// Returns `true` if the combined figment evaluates successfully and
+    /// contains a value at `path`.
+    ///
+    /// See [`Value::find()`] for details on the syntax for `path`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use serde::Deserialize;
+    ///
+    /// use figment::{Figment, providers::{Format, Toml, Json, Env}};
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_file("Config.toml", r#"
+    ///         name = "test"
+    ///
+    ///         [package]
+    ///         name = "my-package"
+    ///     "#)?;
+    ///
+    ///     jail.create_file("Config.json", r#"
+    ///         {
+    ///             "author": { "name": "Bob" }
+    ///         }
+    ///     "#)?;
+    ///
+    ///     let figment = Figment::new()
+    ///         .merge(Toml::file("Config.toml"))
+    ///         .join(Json::file("Config.json"));
+    ///
+    ///     assert!(figment.contains("name"));
+    ///     assert!(figment.contains("package"));
+    ///     assert!(figment.contains("package.name"));
+    ///     assert!(figment.contains("author"));
+    ///     assert!(figment.contains("author.name"));
+    ///     assert!(!figment.contains("author.title"));
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn contains(&self, path: &str) -> bool {
+        self.merged().map_or(false, |v| v.find_ref(path).is_some())
     }
 
     /// Finds the metadata for the value at `key` path. See [`Value::find()`]
