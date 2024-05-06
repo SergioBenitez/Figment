@@ -518,7 +518,7 @@ impl YamlExtended {
     }
 }
 
-impl_format!(Toml "TOML"/"toml": toml::from_str, toml::de::Error);
+impl_format!(Toml "TOML"/"toml": toml_edit::de::from_str, toml_edit::de::Error);
 impl_format!(Yaml "YAML"/"yaml": serde_yaml::from_str, serde_yaml::Error);
 impl_format!(Json "JSON"/"json": serde_json::from_str, serde_json::error::Error);
 impl_format!(YamlExtended "YAML Extended"/"yaml": YamlExtended::from_str, serde_yaml::Error);
