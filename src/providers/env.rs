@@ -232,7 +232,7 @@ impl Env {
     pub fn filter<F: Clone + 'static>(self, filter: F) -> Self
         where F: Fn(&UncasedStr) -> bool
     {
-        self.chain(move |prev| prev.filter(|v| filter(&v)))
+        self.chain(move |prev| prev.filter(|v| filter(v)))
     }
 
     /// Applys an additional mapping to the keys of environment variables being
@@ -432,7 +432,7 @@ impl Env {
     /// });
     /// ```
     pub fn ignore(self, keys: &[&str]) -> Self {
-        let keys: Vec<String> = keys.iter().map(|s| s.to_string()).collect();
+        let keys: Vec<String> = keys.iter().map(|s| (*s).to_string()).collect();
         self.filter(move |key| !keys.iter().any(|k| k.as_str() == key))
     }
 
@@ -461,7 +461,7 @@ impl Env {
     /// });
     /// ```
     pub fn only(self, keys: &[&str]) -> Self {
-        let keys: Vec<String> = keys.iter().map(|s| s.to_string()).collect();
+        let keys: Vec<String> = keys.iter().map(|s| (*s).to_string()).collect();
         self.filter(move |key| keys.iter().any(|k| k.as_str() == key))
     }
 

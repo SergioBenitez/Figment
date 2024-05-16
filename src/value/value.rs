@@ -177,7 +177,7 @@ impl Value {
     /// assert!(value.find_ref("pineapple").is_none());
     /// ```
     pub fn find_ref<'a>(&'a self, path: &str) -> Option<&'a Value> {
-        fn find<'a, 'v>(mut keys: Split<'a, char>, value: &'v Value) -> Option<&'v Value> {
+        fn find<'v>(mut keys: Split<char>, value: &'v Value) -> Option<&'v Value> {
             match keys.next() {
                 Some(k) if !k.is_empty() => find(keys, value.as_dict()?.get(k)?),
                 Some(_) | None => Some(value)
@@ -462,7 +462,7 @@ impl<'a, T: Into<Value> + Clone> From<&'a [T]> for Value {
     }
 }
 
-impl<'a, T: Into<Value>> From<Vec<T>> for Value {
+impl<T: Into<Value>> From<Vec<T>> for Value {
     fn from(vec: Vec<T>) -> Value {
         let vector = vec.into_iter().map(|v| v.into()).collect();
         Value::Array(Tag::Default, vector)
@@ -577,7 +577,7 @@ impl Num {
         Some(match self {
             Num::U8(v) => v as u32,
             Num::U16(v) => v as u32,
-            Num::U32(v) => v as u32,
+            Num::U32(v) => v,
             _ => return None,
         })
     }
@@ -598,7 +598,7 @@ impl Num {
             Num::U16(v) => v as u128,
             Num::U32(v) => v as u128,
             Num::U64(v) => v as u128,
-            Num::U128(v) => v as u128,
+            Num::U128(v) => v,
             Num::USize(v) => v as u128,
             _ => return None,
         })
@@ -624,7 +624,7 @@ impl Num {
             Num::U16(v) => v as u128,
             Num::U32(v) => v as u128,
             Num::U64(v) => v as u128,
-            Num::U128(v) => v as u128,
+            Num::U128(v) => v,
             Num::USize(v) => v as u128,
             Num::I8(v) if v >= 0 => v as u128,
             Num::I16(v) if v >= 0 => v as u128,
@@ -653,7 +653,7 @@ impl Num {
             Num::I16(v) => v as i128,
             Num::I32(v) => v as i128,
             Num::I64(v) => v as i128,
-            Num::I128(v) => v as i128,
+            Num::I128(v) => v,
             Num::ISize(v) => v as i128,
             _ => return None,
         })
@@ -673,7 +673,7 @@ impl Num {
     pub fn to_f64(&self) -> Option<f64> {
         Some(match *self {
             Num::F32(v) => v as f64,
-            Num::F64(v) => v as f64,
+            Num::F64(v) => v,
             _ => return None,
         })
     }
@@ -703,16 +703,16 @@ impl Num {
             Num::U16(v) => Actual::Unsigned(v as u128),
             Num::U32(v) => Actual::Unsigned(v as u128),
             Num::U64(v) => Actual::Unsigned(v as u128),
-            Num::U128(v) => Actual::Unsigned(v as u128),
+            Num::U128(v) => Actual::Unsigned(v),
             Num::USize(v) => Actual::Unsigned(v as u128),
             Num::I8(v) => Actual::Signed(v as i128),
             Num::I16(v) => Actual::Signed(v as i128),
             Num::I32(v) => Actual::Signed(v as i128),
             Num::I64(v) => Actual::Signed(v as i128),
-            Num::I128(v) => Actual::Signed(v as i128),
+            Num::I128(v) => Actual::Signed(v),
             Num::ISize(v) => Actual::Signed(v as i128),
             Num::F32(v) => Actual::Float(v as f64),
-            Num::F64(v) => Actual::Float(v as f64),
+            Num::F64(v) => Actual::Float(v),
         }
     }
 }

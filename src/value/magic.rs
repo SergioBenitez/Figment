@@ -203,7 +203,7 @@ impl Magic for RelativePathBuf {
         }
 
         // If we have this struct with no metadata_path, still use the value.
-        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(&de.value);
+        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(de.value);
         map.insert(Self::FIELDS[1].into(), value.clone());
         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(config, v)))
     }
@@ -592,7 +592,7 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         }
 
         // If we have this struct with default tag, use the value.
-        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(&de.value);
+        let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(de.value);
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), value.clone());
         visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(config, v)))

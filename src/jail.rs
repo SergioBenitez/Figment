@@ -320,9 +320,7 @@ impl Jail {
     pub fn clear_env(&mut self) {
         for (key, val) in std::env::vars_os() {
             std::env::remove_var(&key);
-            if !self.saved_env_vars.contains_key(&key) {
-                self.saved_env_vars.insert(key, Some(val));
-            }
+            self.saved_env_vars.entry(key).or_insert(Some(val));
         }
     }
 
@@ -356,7 +354,7 @@ impl Jail {
 
 impl Drop for Jail {
     fn drop(&mut self) {
-        for (key, value) in self.saved_env_vars.iter() {
+        for (key, value) in &self.saved_env_vars {
             match value {
                 Some(val) => std::env::set_var(key, val),
                 None => std::env::remove_var(key)
