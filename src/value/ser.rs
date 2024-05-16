@@ -231,14 +231,15 @@ impl SeqSerializer {
     }
 }
 
-impl<'a> ser::SerializeSeq for SeqSerializer {
+impl ser::SerializeSeq for SeqSerializer {
     type Ok = Value;
     type Error = Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
         where T: Serialize
     {
-        Ok(self.sequence.push(value.serialize(ValueSerializer)?))
+        self.sequence.push(value.serialize(ValueSerializer)?);
+        Ok(())
     }
 
     fn end(self) -> Result<Self::Ok> {
@@ -250,7 +251,7 @@ impl<'a> ser::SerializeSeq for SeqSerializer {
     }
 }
 
-impl<'a> ser::SerializeTuple for SeqSerializer {
+impl ser::SerializeTuple for SeqSerializer {
     type Ok = Value;
     type Error = Error;
 
@@ -266,7 +267,7 @@ impl<'a> ser::SerializeTuple for SeqSerializer {
 }
 
 // Same thing but for tuple structs.
-impl<'a> ser::SerializeTupleStruct for SeqSerializer {
+impl ser::SerializeTupleStruct for SeqSerializer {
     type Ok = Value;
     type Error = Error;
 
@@ -281,7 +282,7 @@ impl<'a> ser::SerializeTupleStruct for SeqSerializer {
     }
 }
 
-impl<'a> ser::SerializeTupleVariant for SeqSerializer {
+impl ser::SerializeTupleVariant for SeqSerializer {
     type Ok = Value;
     type Error = Error;
 
@@ -306,7 +307,7 @@ impl MapSerializer {
     }
 }
 
-impl<'a> ser::SerializeMap for MapSerializer {
+impl ser::SerializeMap for MapSerializer {
     type Ok = Value;
     type Error = Error;
 
@@ -329,7 +330,7 @@ impl<'a> ser::SerializeMap for MapSerializer {
     }
 
     fn end(self) -> Result<Self::Ok> {
-        let iter = self.keys.into_iter().zip(self.values.into_iter());
+        let iter = self.keys.into_iter().zip(self.values);
         let value: Value = iter.collect::<Dict>().into();
         match self.tag {
             Some(tag) => Ok(crate::util::map![tag => value].into()),
@@ -338,7 +339,7 @@ impl<'a> ser::SerializeMap for MapSerializer {
     }
 }
 
-impl<'a> ser::SerializeStruct for MapSerializer {
+impl ser::SerializeStruct for MapSerializer {
     type Ok = Value;
     type Error = Error;
 
@@ -354,7 +355,7 @@ impl<'a> ser::SerializeStruct for MapSerializer {
     }
 }
 
-impl<'a> ser::SerializeStructVariant for MapSerializer {
+impl ser::SerializeStructVariant for MapSerializer {
     type Ok = Value;
     type Error = Error;
 
