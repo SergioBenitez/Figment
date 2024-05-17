@@ -23,7 +23,7 @@ pub type Dict = Map<String, Value>;
 /// let v = Value::from("hello");
 /// assert_eq!(v.as_str(), Some("hello"));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Value {
     /// A string.
     String(Tag, String),
@@ -417,6 +417,20 @@ impl Value {
             Value::Dict(_, v) => v.iter_mut().for_each(|(_, v)| v.map_tag(f)),
             Value::Array(_, v) => v.iter_mut().for_each(|v| v.map_tag(f)),
             _ => { /* already handled */ }
+        }
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(_, v) => f.debug_tuple("String").field(v).finish(),
+            Self::Char(_, v) => f.debug_tuple("Char").field(v).finish(),
+            Self::Bool(_, v) => f.debug_tuple("Bool").field(v).finish(),
+            Self::Num(_, v) => f.debug_tuple("Num").field(v).finish(),
+            Self::Empty(_, v) => f.debug_tuple("Empty").field(v).finish(),
+            Self::Dict(_, v) => f.debug_tuple("Dict").field(v).finish(),
+            Self::Array(_, v) => f.debug_tuple("Array").field(v).finish(),
         }
     }
 }
