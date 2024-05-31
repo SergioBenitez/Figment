@@ -99,7 +99,7 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
             _ => visitor.visit_some(self)
         };
 
-        result.map_err(|e| e.retagged(tag).resolved(&config))
+        result.map_err(|e| e.retagged(tag).resolved(config))
     }
 
     fn deserialize_struct<V: Visitor<'de>>(
@@ -145,7 +145,7 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
             _ => self.deserialize_any(v)
         };
 
-        result.map_err(|e| e.retagged(tag).resolved(&config))
+        result.map_err(|e| e.retagged(tag).resolved(config))
     }
 
     fn deserialize_newtype_struct<V: Visitor<'de>>(
@@ -432,10 +432,10 @@ impl<'de> Deserialize<'de> for Value {
         // Total hack to "fingerprint" our deserializer by checking if
         // human_readable changes, which does for ours but shouldn't for others.
         let (a, b) = (de.is_human_readable(), de.is_human_readable());
-        if a != b {
-            de.deserialize_struct(Value::NAME, Value::FIELDS, ValueVisitor)
-        } else {
+        if a == b {
             de.deserialize_any(ValueVisitor)
+        } else {
+            de.deserialize_struct(Value::NAME, Value::FIELDS, ValueVisitor)
         }
     }
 }

@@ -109,21 +109,21 @@ impl PartialEq for Tag {
 
 impl Eq for Tag {  }
 
-impl PartialOrd for Tag {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.metadata_id().partial_cmp(&other.metadata_id())
-    }
-}
-
 impl Ord for Tag {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.metadata_id().cmp(&other.metadata_id())
     }
 }
 
+impl PartialOrd for Tag {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl std::hash::Hash for Tag {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u64(self.metadata_id())
+        state.write_u64(self.metadata_id());
     }
 }
 

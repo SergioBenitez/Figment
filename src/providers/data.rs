@@ -290,10 +290,10 @@ impl<F: Format> Provider for Data<F> {
         use Source::*;
         let map: Result<Map<Profile, Dict>, _> = match (&self.source, &self.profile) {
             (File(None), _) => return Ok(Map::new()),
-            (File(Some(path)), None) => F::from_path(&path),
-            (String(s), None) => F::from_str(&s),
-            (File(Some(path)), Some(prof)) => F::from_path(&path).map(|v| prof.collect(v)),
-            (String(s), Some(prof)) => F::from_str(&s).map(|v| prof.collect(v)),
+            (File(Some(path)), None) => F::from_path(path),
+            (String(s), None) => F::from_str(s),
+            (File(Some(path)), Some(prof)) => F::from_path(path).map(|v| prof.collect(v)),
+            (String(s), Some(prof)) => F::from_str(s).map(|v| prof.collect(v)),
         };
 
         Ok(map.map_err(|e| e.to_string())?)

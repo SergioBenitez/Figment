@@ -438,7 +438,7 @@ impl From<String> for Error {
 impl Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Kind::Message(msg) => f.write_str(&msg),
+            Kind::Message(msg) => f.write_str(msg),
             Kind::InvalidType(v, exp) => {
                 write!(f, "invalid type: found {}, expected {}", v, exp)
             }

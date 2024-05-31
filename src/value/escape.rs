@@ -37,7 +37,7 @@ pub fn escape(string: &str) -> Result<Cow<'_, str>, Error> {
                     Some((_, 'n')) => val.push('\n'),
                     Some((_, 'r')) => val.push('\r'),
                     Some((_, 't')) => val.push('\t'),
-                    Some((i, c @ 'u')) | Some((i, c @ 'U')) => {
+                    Some((i, c @ ('u' | 'U'))) => {
                         let len = if c == 'u' { 4 } else { 8 };
                         val.push(hex(&mut chars, i, len)?);
                     }
@@ -64,7 +64,7 @@ fn hex<I>(mut chars: I, i: usize, len: usize) -> Result<char, Error>
     let mut buf = String::with_capacity(len);
     for _ in 0..len {
         match chars.next() {
-            Some((_, ch)) if ch as u32 <= 0x7F && ch.is_digit(16) => buf.push(ch),
+            Some((_, ch)) if ch as u32 <= 0x7F && ch.is_ascii_hexdigit() => buf.push(ch),
             Some((i, ch)) => return Err(Error::InvalidHexEscape(i, ch)),
             None => return Err(Error::UnterminatedString(0)),
         }

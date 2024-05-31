@@ -292,7 +292,7 @@ impl fmt::Display for Source {
             Source::File(p) => {
                 use {std::env::current_dir, crate::util::diff_paths};
 
-                match current_dir().ok().and_then(|cwd| diff_paths(p, &cwd)) {
+                match current_dir().ok().and_then(|cwd| diff_paths(p, cwd)) {
                     Some(r) if r.iter().count() < p.iter().count() => r.display().fmt(f),
                     Some(_) | None => p.display().fmt(f)
                 }
