@@ -5,9 +5,8 @@
 
 mod serialized;
 mod data;
+mod env;
 
-#[cfg(feature = "env")] mod env;
-#[cfg(feature = "env")] pub use self::env::Env;
-
+pub use self::env::Env;
 pub use self::serialized::Serialized;
 pub use self::data::*;

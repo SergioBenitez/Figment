@@ -11,18 +11,20 @@ keywords = ["config", "configuration", "toml", "json", "yaml"]
 license = "MIT OR Apache-2.0"
 categories = ["config"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nightly)'] }
+
 [features]
-env = ["parse-value"]
+default = ["env"]
 json = ["serde_json"]
-parse-value = ["pear"]
 test = ["tempfile", "parking_lot"]
 toml = ["toml_edit"]
 yaml = ["serde_yaml"]
+env = [] # does nothing; here for backwards compat
 
 [dependencies]
 serde = "1.0"
 uncased = "0.9.3"
-pear = { version = "0.2", optional = true }
 toml_edit = { version = "0.22", optional = true, default-features = false, features = ["parse", "serde"] }
 serde_json = { version = "1.0", optional = true }
 serde_yaml = { version = "0.9", optional = true }

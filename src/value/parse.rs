@@ -1,107 +1,198 @@
-use pear::{parse_error, parsers::*};
-use pear::combinators::*;
-use pear::macros::{parse, parser, switch};
-use pear::input::{Pear, Text};
+use std::borrow::Cow;
 
 use crate::value::{Value, Dict, escape::escape};
 
-type Input<'a> = Pear<Text<'a>>;
-type Result<'a, T> = pear::input::Result<T, Input<'a>>;
+use super::Empty;
 
-#[inline(always)]
-fn is_whitespace(&byte: &char) -> bool {
-    byte.is_ascii_whitespace()
+struct Parser<'a> {
+    cursor: &'a str,
 }
 
-#[inline(always)]
-fn is_not_separator(&byte: &char) -> bool {
-    !matches!(byte, ',' | '{' | '}' | '[' | ']')
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum Error {
+    Expected(Value),
+    Escape(super::escape::Error),
+    Eof,
 }
 
-// TODO: Be more permissive here?
-#[inline(always)]
-fn is_ident_char(&byte: &char) -> bool {
-    byte.is_ascii_alphanumeric() || byte == '_' || byte == '-'
-}
+type Result<'a, T> = std::result::Result<T, Error>;
 
-#[parser]
-fn string<'a>(input: &mut Input<'a>) -> Result<'a, String> {
-    let mut is_escaped = false;
-    let str_char = |&c: &char| -> bool {
-        if is_escaped { is_escaped = false; return true; }
-        if c == '\\' { is_escaped = true; return true; }
-        c != '"'
-    };
-
-    let inner = (eat('"')?, take_while(str_char)?, eat('"')?).1;
-    match escape(inner) {
-        Ok(string) => string.into_owned(),
-        Err(e) => parse_error!("invalid string: {}", e)?,
+impl<'a> Parser<'a> {
+    fn new(cursor: &'a str) -> Self {
+        Self { cursor }
     }
-}
 
-#[parser]
-fn key<'a>(input: &mut Input<'a>) -> Result<'a, String> {
-    switch! {
-        peek('"') => Ok(string()?),
-        _ => Ok(take_some_while(is_ident_char)?.to_string())
+    fn peek(&self, c: char) -> bool {
+        self.cursor.chars().next() == Some(c)
     }
-}
 
-#[parser]
-fn key_value<'a>(input: &mut Input<'a>) -> Result<'a, (String, Value)> {
-    let key = (surrounded(key, is_whitespace)?, eat('=')?).0;
-    (key, surrounded(value, is_whitespace)?)
-}
+    fn peek_next(&self) -> Option<char> {
+        self.cursor.chars().next()
+    }
 
-#[parser]
-fn array<'a>(input: &mut Input<'a>) -> Result<'a, Vec<Value>> {
-    Ok(delimited_collect('[', value, ',', ']')?)
-}
-
-#[parser]
-fn dict<'a>(input: &mut Input<'a>) -> Result<'a, Dict> {
-    Ok(delimited_collect('{', key_value, ',', '}')?)
-}
-
-#[parser]
-fn value<'a>(input: &mut Input<'a>) -> Result<'a, Value> {
-    skip_while(is_whitespace)?;
-    let val = switch! {
-        eat_slice("true") => Value::from(true),
-        eat_slice("false") => Value::from(false),
-        peek('{') => Value::from(dict()?),
-        peek('[') => Value::from(array()?),
-        peek('"') => Value::from(string()?),
-        peek('\'') => Value::from((eat('\'')?, eat_any()?, eat('\'')?).1),
-        _ => {
-            let value = take_while(is_not_separator)?.trim();
-            if value.contains('.') {
-                if let Ok(float) = value.parse::<f64>() {
-                    return Ok(Value::from(float));
-                }
+    #[inline]
+    fn eat_if<F>(&mut self, f: F) -> Option<char>
+        where F: FnOnce(&char) -> bool,
+    {
+        match self.cursor.chars().next() {
+            Some(ch) if f(&ch) => {
+                self.cursor = &self.cursor[ch.len_utf8()..];
+                Some(ch)
             }
-
-            if let Ok(int) = value.parse::<usize>() {
-                Value::from(int)
-            } else if let Ok(int) = value.parse::<isize>() {
-                Value::from(int)
-            } else {
-                Value::from(value.to_string())
-            }
+            _ => None,
         }
-    };
+    }
 
-    skip_while(is_whitespace)?;
-    val
+    fn eat(&mut self, c: char) -> Result<char> {
+        self.eat_if(|&ch| ch == c)
+            .ok_or_else(|| Error::Expected(Value::from(c)))
+    }
+
+    fn eat_any(&mut self) -> Result<char> {
+        self.eat_if(|_| true).ok_or(Error::Eof)
+    }
+
+    fn skip_whitespace(&mut self) {
+        self.cursor = self.cursor.trim_start();
+    }
+
+    fn substr<F>(&mut self, f: F) -> Result<&'a str>
+        where F: FnMut(&char) -> bool,
+    {
+        let len = self.cursor.chars()
+            .take_while(f)
+            .map(|c| c.len_utf8())
+            .sum();
+
+        let (substring, rest) = self.cursor.split_at(len);
+        self.cursor = rest;
+        Ok(substring)
+    }
+
+    fn quoted_char(&mut self) -> Result<char> {
+        self.eat('\'')?;
+        let ch = self.eat_any()?;
+        self.eat('\'')?;
+        Ok(ch)
+    }
+
+    fn quoted_str(&mut self) -> Result<Cow<'a, str>> {
+        self.eat('"')?;
+
+        let mut is_escaped = false;
+        let inner = self.substr(|&c: &char| -> bool {
+            if is_escaped { is_escaped = false; return true; }
+            if c == '\\' { is_escaped = true; return true; }
+            c != '"'
+        })?;
+
+        self.eat('"')?;
+        escape(inner).map_err(Error::Escape)
+    }
+
+    fn key(&mut self) -> Result<Cow<'a, str>> {
+        #[inline(always)]
+        fn is_ident_char(&byte: &char) -> bool {
+            byte.is_ascii_alphanumeric() || byte == '_' || byte == '-'
+        }
+
+        if self.peek('"') {
+            self.quoted_str()
+        } else {
+            self.substr(is_ident_char).map(Cow::Borrowed)
+        }
+    }
+
+    fn dict(&mut self) -> Result<Dict> {
+        self.eat('{')?;
+
+        let mut dict = Dict::new();
+        loop {
+            self.skip_whitespace();
+            if self.eat('}').is_ok() {
+                break;
+            }
+
+            let key = self.key()?;
+            self.skip_whitespace();
+            self.eat('=')?;
+            self.skip_whitespace();
+            let value = self.value()?;
+            dict.insert(key.to_string(), value);
+
+            self.skip_whitespace();
+            let _ = self.eat(',');
+        }
+
+        Ok(dict)
+    }
+
+    fn array(&mut self) -> Result<Vec<Value>> {
+        self.eat('[')?;
+        let mut values = Vec::new();
+
+        loop {
+            self.skip_whitespace();
+            if self.eat(']').is_ok() {
+                break;
+            }
+
+            values.push(self.value()?);
+            self.skip_whitespace();
+            let _ = self.eat(',');
+        }
+
+        Ok(values)
+    }
+
+    fn value(&mut self) -> Result<Value> {
+        #[inline(always)]
+        fn is_not_separator(&byte: &char) -> bool {
+            !matches!(byte, ',' | '{' | '}' | '[' | ']')
+        }
+
+        let value = match self.peek_next() {
+            Some('"') => Value::from(self.quoted_str()?.to_string()),
+            Some('\'') => Value::from(self.quoted_char()?),
+            Some('[') => Value::from(self.array()?),
+            Some('{') => Value::from(self.dict()?),
+            Some(_) => match self.substr(is_not_separator)?.trim() {
+                "true" => Value::from(true),
+                "false" => Value::from(false),
+                value => {
+                    if value.contains('.') {
+                        if let Ok(float) = value.parse::<f64>() {
+                            Value::from(float)
+                        } else {
+                            Value::from(value.to_string())
+                        }
+                    } else if let Ok(int) = value.parse::<usize>() {
+                        Value::from(int)
+                    } else if let Ok(int) = value.parse::<isize>() {
+                        Value::from(int)
+                    } else {
+                        Value::from(value.to_string())
+                    }
+                }
+            },
+            None => Value::from(Empty::Unit),
+        };
+
+        self.skip_whitespace();
+        Ok(value)
+    }
 }
 
 impl std::str::FromStr for Value {
     type Err = std::convert::Infallible;
 
     fn from_str(s: &str) -> std::result::Result<Self, std::convert::Infallible> {
-        Ok(parse!(value: Text::from(s))
-            .unwrap_or_else(|_| Value::from(s.to_string())))
+        let mut parser = Parser::new(s.trim());
+        match parser.value() {
+            Ok(value) => Ok(value),
+            Err(_) => Ok(Value::from(s)),
+        }
     }
 }
 
@@ -113,7 +204,9 @@ mod tests {
     macro_rules! assert_parse_eq {
         ($string:expr => $expected:expr) => ({
             let expected = Value::from($expected);
-            let actual: Value = $string.parse().unwrap();
+            let actual: Value = $string.parse()
+                .unwrap_or_else(|e| panic!("failed to parse {:?}: {:?}", $string, e));
+
             assert_eq!(actual, expected, "got {:?}, expected {:?}", actual, expected);
         });
 
@@ -168,7 +261,10 @@ mod tests {
 
         assert_parse_eq! {
             "[1,2,3]" => vec![1u8, 2u8, 3u8],
+            "[ 1 , 2   ,3]" => vec![1u8, 2u8, 3u8],
+            " [ 1 , 2   , 3  ] " => vec![1u8, 2u8, 3u8],
             "{a=b}" => map!["a" => "b"],
+            " { a = b } " => map!["a" => "b"],
             "{\"a\"=b}" => map!["a" => "b"],
             "{\"a.b.c\"=b}" => map!["a.b.c" => "b"],
             "{a=1,b=3}" => map!["a" => 1u8, "b" => 3u8],

@@ -295,7 +295,6 @@
 //! | feature | gated namespace             | description                               |
 //! |---------|-----------------------------|-------------------------------------------|
 //! | `test`  | [`Jail`]                    | Semi-sandboxed environment for testing.   |
-//! | `env`   | [`providers::Env`]          | Environment variable [`Provider`].        |
 //! | `toml`  | [`providers::Toml`]         | TOML file/string [`Provider`].            |
 //! | `json`  | [`providers::Json`]         | JSON file/string [`Provider`].            |
 //! | `yaml`  | [`providers::Yaml`]         | YAML file/string [`Provider`].            |
@@ -310,6 +309,7 @@
 //!
 //! | provider                              | description                            |
 //! |---------------------------------------|----------------------------------------|
+//! | [`providers::Env`]                    | Environment variable [`Provider`].     |
 //! | [`providers::Serialized`]             | Source from any [`Serialize`] type.    |
 //! | [`(impl AsRef<str>, impl Serialize)`] | Global source from a `("key", value)`. |
 //! | [`&T` _where_ `T: Provider`]          | Source from `T` as a reference.        |

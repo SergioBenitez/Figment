@@ -101,7 +101,6 @@ crate::util::cloneable_fn_trait!(
 ///     inherent methods. The dictionary is emitted to the profile
 ///     [`profile`](#structfield.profile), configurable via [`Env::profile()`].
 #[derive(Clone)]
-#[cfg_attr(nightly, doc(cfg(feature = "env")))]
 pub struct Env {
     filter_map: Box<dyn FilterMap>,
     /// The profile config data will be emitted to. Defaults to

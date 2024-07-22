@@ -4,11 +4,7 @@ mod value;
 mod ser;
 mod de;
 mod tag;
-
-#[cfg(feature = "parse-value")]
 mod parse;
-
-#[cfg(feature = "parse-value")]
 mod escape;
 
 pub mod magic;
