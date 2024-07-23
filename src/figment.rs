@@ -388,6 +388,12 @@ impl Figment {
     ///         [subtree.bark]
     ///         dog = true
     ///         cat = false
+    ///
+    ///         [[lives]]
+    ///         cat = 9
+    ///
+    ///         [[lives]]
+    ///         dog = 1
     ///     "#)?;
     ///
     ///     let root = Figment::from(Toml::file("Config.toml"));
@@ -409,6 +415,15 @@ impl Figment {
     ///     let not_a_dict = root.focus("cat");
     ///     assert!(not_a_dict.extract_inner::<bool>("cat").is_err());
     ///     assert!(not_a_dict.extract_inner::<bool>("dog").is_err());
+    ///
+    ///     let cat_lives = root.focus("lives.0");
+    ///     assert_eq!(cat_lives.extract_inner::<u8>("cat").unwrap(), 9);
+    ///     let dog_lives = root.focus("lives.1");
+    ///     assert_eq!(dog_lives.extract_inner::<u8>("dog").unwrap(), 1);
+    ///
+    ///     let invalid_index = root.focus("lives.two");
+    ///     assert!(invalid_index.extract_inner::<bool>("cat").is_err());
+    ///     assert!(invalid_index.extract_inner::<bool>("dog").is_err());
     ///
     ///     Ok(())
     /// });

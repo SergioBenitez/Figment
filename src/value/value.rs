@@ -102,10 +102,10 @@ impl Value {
     }
 
     /// Looks up and returns the value at path `path`, where `path` is of the
-    /// form `a.b.c` where `a`, `b`, and `c` are keys to dictionaries. If the
-    /// key is empty, simply returns `self`. If the key is not empty and `self`
-    /// or any of the values for non-leaf keys in the path are not dictionaries,
-    /// returns `None`.
+    /// form `a.2.c` where `a` and `c` are keys to dictionaries, and `2` is
+    /// an array index. If the key is empty, simply returns `self`. If the key
+    /// is not empty and `self` or any of the values for non-leaf keys in the
+    /// path are not arrays or dictionaries, returns `None`.
     ///
     /// This method consumes `self`. See [`Value::find_ref()`] for a
     /// non-consuming variant.
@@ -116,30 +116,46 @@ impl Value {
     /// use figment::{value::Value, util::map};
     ///
     /// let value = Value::from(map! {
-    ///     "apple" => map! {
+    ///     "apple" => Value::from(map! {
     ///         "bat" => map! {
     ///             "pie" => 4usize,
     ///         },
     ///         "cake" => map! {
     ///             "pumpkin" => 10usize,
-    ///         }
-    ///     }
+    ///         },
+    ///     }),
+    ///     "duck" => Value::from(vec![
+    ///         map!{
+    ///             "pasta" => 42usize,
+    ///         },
+    ///         map!{
+    ///             "pizza" => 229usize,
+    ///         },
+    ///     ]),
     /// });
     ///
     /// assert!(value.clone().find("apple").is_some());
     /// assert!(value.clone().find("apple.bat").is_some());
     /// assert!(value.clone().find("apple.cake").is_some());
+    /// assert!(value.clone().find("duck").is_some());
+    /// assert!(value.clone().find("duck.0").is_some());
+    /// assert!(value.clone().find("duck.1").is_some());
     ///
     /// assert_eq!(value.clone().find("apple.bat.pie").unwrap().to_u128(), Some(4));
     /// assert_eq!(value.clone().find("apple.cake.pumpkin").unwrap().to_u128(), Some(10));
+    /// assert_eq!(value.clone().find("duck.0.pasta").unwrap().to_u128(), Some(42));
+    /// assert_eq!(value.clone().find("duck.1.pizza").unwrap().to_u128(), Some(229));
     ///
     /// assert!(value.clone().find("apple.pie").is_none());
     /// assert!(value.clone().find("pineapple").is_none());
+    /// assert!(value.clone().find("duck.55").is_none());
+    /// assert!(value.clone().find("duck.0.pizza").is_none());
+    /// assert!(value.clone().find("duck.one").is_none());
     /// ```
     pub fn find(self, path: &str) -> Option<Value> {
         fn find(mut keys: Split<char>, value: Value) -> Option<Value> {
             match keys.next() {
-                Some(k) if !k.is_empty() => find(keys, value.into_dict()?.remove(k)?),
+                Some(k) if !k.is_empty() => find(keys, value.index(k)?),
                 Some(_) | None => Some(value)
             }
         }
@@ -156,30 +172,46 @@ impl Value {
     /// use figment::{value::Value, util::map};
     ///
     /// let value = Value::from(map! {
-    ///     "apple" => map! {
+    ///     "apple" => Value::from(map! {
     ///         "bat" => map! {
     ///             "pie" => 4usize,
     ///         },
     ///         "cake" => map! {
     ///             "pumpkin" => 10usize,
-    ///         }
-    ///     }
+    ///         },
+    ///     }),
+    ///     "duck" => Value::from(vec![
+    ///         map!{
+    ///             "pasta" => 42usize,
+    ///         },
+    ///         map!{
+    ///             "pizza" => 229usize,
+    ///         },
+    ///     ]),
     /// });
     ///
     /// assert!(value.find_ref("apple").is_some());
     /// assert!(value.find_ref("apple.bat").is_some());
     /// assert!(value.find_ref("apple.cake").is_some());
+    /// assert!(value.find_ref("duck").is_some());
+    /// assert!(value.find_ref("duck.0").is_some());
+    /// assert!(value.find_ref("duck.1").is_some());
     ///
     /// assert_eq!(value.find_ref("apple.bat.pie").unwrap().to_u128(), Some(4));
     /// assert_eq!(value.find_ref("apple.cake.pumpkin").unwrap().to_u128(), Some(10));
+    /// assert_eq!(value.find_ref("duck.0.pasta").unwrap().to_u128(), Some(42));
+    /// assert_eq!(value.find_ref("duck.1.pizza").unwrap().to_u128(), Some(229));
     ///
     /// assert!(value.find_ref("apple.pie").is_none());
     /// assert!(value.find_ref("pineapple").is_none());
+    /// assert!(value.find_ref("duck.55").is_none());
+    /// assert!(value.find_ref("duck.0.pizza").is_none());
+    /// assert!(value.find_ref("duck.one").is_none());
     /// ```
-    pub fn find_ref<'a>(&'a self, path: &str) -> Option<&'a Value> {
+    pub fn find_ref(&self, path: &str) -> Option<&Value> {
         fn find<'v>(mut keys: Split<char>, value: &'v Value) -> Option<&'v Value> {
             match keys.next() {
-                Some(k) if !k.is_empty() => find(keys, value.as_dict()?.get(k)?),
+                Some(k) if !k.is_empty() => find(keys, value.index_ref(k)?),
                 Some(_) | None => Some(value)
             }
         }
@@ -391,6 +423,31 @@ impl Value {
             Value::Empty(_, e) => e.to_actual(),
             Value::Dict(_, _) => Actual::Map,
             Value::Array(_, _) => Actual::Seq,
+        }
+    }
+
+    /// Attempts to retrieve a nested value through dictionary key or array index.
+    pub(crate) fn index(self, key: &str) -> Option<Value> {
+        fn try_remove<T>(mut vec: Vec<T>, key: &str) -> Option<T> {
+            let index = key.parse().ok()?;
+            vec.get(index)?;
+
+            Some(vec.swap_remove(index))
+        }
+
+        match self {
+            Self::Dict(_, mut dict) => dict.remove(key),
+            Self::Array(_, array) => try_remove(array, key),
+            _ => None,
+        }
+    }
+
+    /// Same as [`Self::index()`] but works on references.
+    pub(crate) fn index_ref(&self, key: &str) -> Option<&Value> {
+        match self {
+            Self::Dict(_, dict) => dict.get(key),
+            Self::Array(_, array) => array.get(key.parse::<usize>().ok()?),
+            _ => None,
         }
     }
 
