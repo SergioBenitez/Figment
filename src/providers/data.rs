@@ -4,12 +4,14 @@ use std::path::{Path, PathBuf};
 use serde::de::{self, DeserializeOwned};
 
 use crate::value::{Map, Dict};
+use crate::error::Kind;
 use crate::{Error, Profile, Provider, Metadata};
 
 #[derive(Debug, Clone)]
 enum Source {
-    File(Option<PathBuf>),
-    String(String)
+    /// [`Ok`] if the file exists, [`Err`] if not.
+    File(Result<PathBuf, PathBuf>),
+    String(String),
 }
 
 /// A `Provider` that sources values from a file or string in a given
@@ -52,7 +54,8 @@ enum Source {
 ///     parsed, and the parsed dictionary is emitted into the profile
 ///     configurable via [`Data::profile()`], which defaults to
 ///     [`Profile::Default`]. If the source is a file and the file is not
-///     present, an empty dictionary is emitted.
+///     present, an empty dictionary is emitted, unless it was set to required
+///     using [`Data::required()`].
 ///
 ///   * **Data (Nested)**
 ///
@@ -62,6 +65,7 @@ enum Source {
 #[derive(Debug, Clone)]
 pub struct Data<F: Format> {
     source: Source,
+    required: bool,
     /// The profile data will be emitted to if nesting is disabled. Defaults to
     /// [`Profile::Default`].
     pub profile: Option<Profile>,
@@ -70,7 +74,12 @@ pub struct Data<F: Format> {
 
 impl<F: Format> Data<F> {
     fn new(source: Source, profile: Option<Profile>) -> Self {
-        Data { source, profile, _format: PhantomData }
+        Data {
+            source,
+            required: false,
+            profile,
+            _format: PhantomData,
+        }
     }
 
     /// Returns a `Data` provider that sources its values by parsing the file at
@@ -110,23 +119,23 @@ impl<F: Format> Data<F> {
     /// });
     /// ```
     pub fn file<P: AsRef<Path>>(path: P) -> Self {
-        fn find(path: &Path) -> Option<PathBuf> {
+        fn find(path: &Path) -> Result<PathBuf, PathBuf> {
             if path.is_absolute() {
-                match path.is_file() {
-                    true => return Some(path.to_path_buf()),
-                    false => return None
-                }
+                return match path.is_file() {
+                    true => Ok(path.to_path_buf()),
+                    false => Err(path.to_path_buf()),
+                };
             }
 
-            let cwd = std::env::current_dir().ok()?;
+            let cwd = std::env::current_dir().map_err(|_| path.to_path_buf())?;
             let mut cwd = cwd.as_path();
             loop {
                 let file_path = cwd.join(path);
                 if file_path.is_file() {
-                    return Some(file_path);
+                    return Ok(file_path);
                 }
 
-                cwd = cwd.parent()?;
+                cwd = cwd.parent().ok_or_else(|| path.to_path_buf())?;
             }
         }
 
@@ -167,7 +176,12 @@ impl<F: Format> Data<F> {
     /// });
     /// ```
     pub fn file_exact<P: AsRef<Path>>(path: P) -> Self {
-        Data::new(Source::File(Some(path.as_ref().to_owned())), Some(Profile::Default))
+        let file = match path.as_ref().to_owned() {
+            path if path.exists() => Ok(path),
+            path => Err(path),
+        };
+
+        Data::new(Source::File(file), Some(Profile::Default))
     }
 
     /// Returns a `Data` provider that sources its values by parsing the string
@@ -253,6 +267,42 @@ impl<F: Format> Data<F> {
         self
     }
 
+    /// Sets `self` to require its underlying source file to be present.
+    /// Does nothing for string sources.
+    ///
+    /// ```rust
+    /// use figment::{Figment, Jail, providers::{Format, Toml}};
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Debug, PartialEq, Deserialize)]
+    /// struct Config {
+    ///     foo: usize,
+    /// }
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     // Create 'config.toml'.
+    ///     jail.create_file("config.toml", "foo = 123")?;
+    ///
+    ///     // The default behaviour is to permit missing files.
+    ///     let config = Figment::from(Toml::file("config.toml")).extract::<Config>()?;
+    ///     assert_eq!(config.foo, 123);
+    ///
+    ///     // Setting the file to required works because it is present.
+    ///     let config = Figment::from(Toml::file("config.toml").required(true)).extract::<Config>()?;
+    ///     assert_eq!(config.foo, 123);
+    ///
+    ///     // Setting a missing file to required causes extract to error.
+    ///     let config = Figment::from(Toml::file("doesntexist.toml").required(true)).extract::<Config>();
+    ///     assert!(config.is_err());
+    ///
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn required(mut self, required: bool) -> Self {
+        self.required = required;
+        self
+    }
+
     /// Set the profile to emit data to when nesting is disabled.
     ///
     /// ```rust
@@ -278,22 +328,23 @@ impl<F: Format> Data<F> {
 
 impl<F: Format> Provider for Data<F> {
     fn metadata(&self) -> Metadata {
-        use Source::*;
+        use Source as S;
         match &self.source {
-            String(_) => Metadata::named(format!("{} source string", F::NAME)),
-            File(None) => Metadata::named(format!("{} file", F::NAME)),
-            File(Some(p)) => Metadata::from(format!("{} file", F::NAME), &**p)
+            S::String(_) => Metadata::named(format!("{} source string", F::NAME)),
+            S::File(Err(_)) => Metadata::named(format!("{} file", F::NAME)),
+            S::File(Ok(p)) => Metadata::from(format!("{} file", F::NAME), &**p),
         }
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
-        use Source::*;
+        use Source as S;
         let map: Result<Map<Profile, Dict>, _> = match (&self.source, &self.profile) {
-            (File(None), _) => return Ok(Map::new()),
-            (File(Some(path)), None) => F::from_path(path),
-            (String(s), None) => F::from_str(s),
-            (File(Some(path)), Some(prof)) => F::from_path(path).map(|v| prof.collect(v)),
-            (String(s), Some(prof)) => F::from_str(s).map(|v| prof.collect(v)),
+            (S::File(Err(path)), _) if self.required => return Err(Kind::MissingFile(path.clone()).into()),
+            (S::File(Err(_)), _) => return Ok(Map::new()),
+            (S::File(Ok(path)), None) => F::from_path(path),
+            (S::String(s), None) => F::from_str(s),
+            (S::File(Ok(path)), Some(prof)) => F::from_path(path).map(|v| prof.collect(v)),
+            (S::String(s), Some(prof)) => F::from_str(s).map(|v| prof.collect(v)),
         };
 
         Ok(map.map_err(|e| e.to_string())?)
