@@ -271,6 +271,13 @@ use crate::value::{Value, Dict};
 pub fn nest(key: &str, value: Value) -> Value {
     fn value_from(mut keys: std::str::Split<'_, char>, value: Value) -> Value {
         match keys.next() {
+            Some(k) if k.parse::<usize>().is_ok() => {
+                // TODO
+                // even if we do honor the index, it will get lost when coalescing.
+                // seems to me that nesting arrays will only be truly useful when
+                // coalescing two array items by their index is possible.
+                Value::from(vec![value_from(keys, value)])
+            }
             Some(k) if !k.is_empty() => {
                 let mut dict = Dict::new();
                 dict.insert(k.into(), value_from(keys, value));
