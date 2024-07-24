@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::{Profile, Provider, Metadata};
-use crate::coalesce::Coalescible;
+use crate::coalesce::{Coalescible, Order};
 use crate::value::{Map, Dict};
 use crate::error::Error;
 use crate::util::nest;
@@ -395,23 +395,33 @@ impl Env {
     /// struct Config {
     ///     foo: Foo,
     ///     map: Dict,
+    ///     array: Vec<usize>,
     /// }
     ///
     /// Jail::expect_with(|jail| {
     ///     // Without splitting: using structured data.
     ///     jail.set_env("APP_FOO", "{key=10}");
     ///     jail.set_env("APP_MAP", "{one=1,two=2.0}");
+    ///     jail.set_env("APP_ARRAY", "[1,2,3]");
     ///
     ///     let config: Config = Figment::from(Env::prefixed("APP_")).extract()?;
     ///     assert_eq!(config, Config {
     ///         foo: Foo { key: 10 },
     ///         map: map!["one".into() => 1u8.into(), "two".into() => 2.0.into()],
+    ///         array: vec![1, 2, 3],
     ///     });
+    ///
+    ///     jail.clear_env();
     ///
     ///     // With splitting.
     ///     jail.set_env("APP_FOO_KEY", 20);
     ///     jail.set_env("APP_MAP_ONE", "1.0");
     ///     jail.set_env("APP_MAP_TWO", "dos");
+    ///
+    ///     // Note that array order currently depends on definition order
+    ///     jail.set_env("APP_ARRAY_0", "4");
+    ///     jail.set_env("APP_ARRAY_2", "5");
+    ///     jail.set_env("APP_ARRAY_1", "6");
     ///
     ///     let config: Config = Figment::new()
     ///         .merge(Env::prefixed("APP_").split("_"))
@@ -420,6 +430,7 @@ impl Env {
     ///     assert_eq!(config, Config {
     ///         foo: Foo { key: 20 },
     ///         map: map!["one".into() => 1.0.into(), "two".into() => "dos".into()],
+    ///         array: vec![4, 5, 6],
     ///     });
     ///
     ///     Ok(())
@@ -637,7 +648,7 @@ impl Provider for Env {
                 .into_dict()
                 .expect("key is non-empty: must have dict");
 
-            dict = dict.merge(nested_dict);
+            dict = dict.coalesce(nested_dict, Order::Admerge);
         }
 
         Ok(self.profile.collect(dict))
