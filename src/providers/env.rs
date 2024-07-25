@@ -397,11 +397,9 @@ impl Env {
     ///     jail.set_env("APP_FOO_KEY", 20);
     ///     jail.set_env("APP_MAP_ONE", "1.0");
     ///     jail.set_env("APP_MAP_TWO", "dos");
-    ///
-    ///     // Note that array order currently depends on definition order
     ///     jail.set_env("APP_ARRAY_0", "4");
-    ///     jail.set_env("APP_ARRAY_2", "5");
-    ///     jail.set_env("APP_ARRAY_1", "6");
+    ///     jail.set_env("APP_ARRAY_2", "6");
+    ///     jail.set_env("APP_ARRAY_1", "5");
     ///
     ///     let config: Config = Figment::new()
     ///         .merge(Env::prefixed("APP_").split("_"))
@@ -628,7 +626,7 @@ impl Provider for Env {
                 .into_dict()
                 .expect("key is non-empty: must have dict");
 
-            dict = dict.coalesce(nested_dict, Order::Admerge);
+            dict = dict.coalesce(nested_dict, Order::Zipmerge);
         }
 
         Ok(self.profile.collect(dict))

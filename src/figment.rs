@@ -22,22 +22,25 @@ use crate::coalesce::{Coalescible, Order};
 /// ## Conflict Resolution
 ///
 /// Conflicts arising from two providers providing values for the same key are
-/// resolved via one of four strategies: [`join`], [`adjoin`], [`merge`], and
-/// [`admerge`]. In general, `join` and `adjoin` prefer existing values while
-/// `merge` and `admerge` prefer later values. The `ad-` strategies additionally
-/// concatenate conflicting arrays whereas the non-`ad-` strategies treat arrays
-/// as non-composite values.
+/// resolved via one of six strategies: [`join`], [`adjoin`], [`zipjoin`],
+/// [`merge`], [`admerge`], and [`zipmerge`]. In general, the `-join` strategies
+/// prefer existing values while the `-merge` strategies prefer later values.
+/// The `ad-` strategies additionally concatenate arrays, the `zip-` strategies
+/// combine both of the first items, both of the second items and so on, whereas
+/// the unprefixed strategies treat arrays as non-composite values.
 ///
 /// The table below summarizes these strategies and their behavior, with the
 /// column label referring to the type of the value pointed to by the
 /// conflicting keys:
 ///
-/// | Strategy    | Dictionaries   | Arrays        | All Others    |
-/// |-------------|----------------|---------------|---------------|
-/// | [`join`]    | Union, Recurse | Keep Existing | Keep Existing |
-/// | [`adjoin`]  | Union, Recurse | Concatenate   | Keep Existing |
-/// | [`merge`]   | Union, Recurse | Use Incoming  | Use Incoming  |
-/// | [`admerge`] | Union, Recurse | Concatenate   | Use Incoming  |
+/// | Strategy     | Dictionaries   | Arrays        | All Others    |
+/// |--------------|----------------|---------------|---------------|
+/// | [`join`]     | Union, Recurse | Keep Existing | Keep Existing |
+/// | [`adjoin`]   | Union, Recurse | Concatenate   | Keep Existing |
+/// | [`zipjoin`]  | Union, Recurse | Zip by index  | Keep Existing |
+/// | [`merge`]    | Union, Recurse | Use Incoming  | Use Incoming  |
+/// | [`admerge`]  | Union, Recurse | Concatenate   | Use Incoming  |
+/// | [`zipmerge`] | Union, Recurse | Zip by index  | Use Incoming  |
 ///
 /// ### Description
 ///
@@ -50,6 +53,7 @@ use crate::coalesce::{Coalescible, Order};
 ///   * `join` uses the existing value
 ///   * `merge` uses the incoming value
 ///   * `adjoin` and `admerge` concatenate the arrays
+///   * `zipjoin` and `zipmerge` combine array items with equal index
 ///
 /// If both keys point to a **non-composite** (`String`, `Num`, etc.) or values
 /// of different kinds (i.e, **array** and **num**):
@@ -59,8 +63,10 @@ use crate::coalesce::{Coalescible, Order};
 ///
 /// [`join`]: Figment::join()
 /// [`adjoin`]: Figment::adjoin()
+/// [`zipjoin`]: Figment::zipjoin()
 /// [`merge`]: Figment::merge()
 /// [`admerge`]: Figment::admerge()
+/// [`zipmerge`]: Figment::zipmerge()
 ///
 /// For examples, refer to each strategy's documentation.
 ///
@@ -251,6 +257,56 @@ impl Figment {
         self.provide(provider, Order::Adjoin)
     }
 
+    /// Joins `provider` into the current figment while zipping up vectors.
+    /// See [conflict resolution](#conflict-resolution) for details.
+    ///
+    /// ```rust
+    /// use figment::Figment;
+    /// use figment::util::map;
+    /// use figment::value::Map;
+    ///
+    /// let figment = Figment::new()
+    ///     .join(("string", "original"))
+    ///     .join(("vec", vec!["item 1", "item 2"]))
+    ///     .join(("vec_map", vec![
+    ///         map!["inner_value" => "inner original", "old_inner_value" => "old"],
+    ///         map!["other_value" => "other"]
+    ///     ]));
+    ///
+    /// let new_figment = Figment::new()
+    ///     .join(("string", "replaced"))
+    ///     .join(("vec", vec![None, Some("replaced item 2"), Some("item 3")]))
+    ///     .join(("vec_map", vec![
+    ///         map!["inner_value" => "inner replaced", "new_inner_value" => "new"],
+    ///     ]))
+    ///     .join(("new", "value"));
+    ///
+    /// let figment = figment.zipjoin(new_figment); // **zipjoin**
+    ///
+    /// let string: String = figment.extract_inner("string").unwrap();
+    /// assert_eq!(string, "original"); // existing value retained
+    ///
+    /// let vec: Vec<String> = figment.extract_inner("vec").unwrap();
+    /// assert_eq!(vec, vec!["item 1", "item 2", "item 3"]); // arrays zipped up
+    ///
+    /// let vec_map: Vec<Map<String, String>> = figment.extract_inner("vec_map").unwrap();
+    /// assert_eq!(vec_map, vec![
+    ///     map![ // union of both maps
+    ///         "inner_value".into() => "inner original".into(), // existing value retained
+    ///         "old_inner_value".into() => "old".into(), // existing value retained
+    ///         "new_inner_value".into() => "new".into() // new key added
+    ///     ],
+    ///     map!["other_value".into() => "other".into()] // new array item added
+    /// ]);
+    ///
+    /// let new: String = figment.extract_inner("new").unwrap();
+    /// assert_eq!(new, "value"); // new key added
+    /// ```
+    #[track_caller]
+    pub fn zipjoin<T: Provider>(self, provider: T) -> Self {
+        self.provide(provider, Order::Zipjoin)
+    }
+
     /// Merges `provider` into the current figment.
     /// See [conflict resolution](#conflict-resolution) for details.
     ///
@@ -331,6 +387,56 @@ impl Figment {
     #[track_caller]
     pub fn admerge<T: Provider>(self, provider: T) -> Self {
         self.provide(provider, Order::Admerge)
+    }
+
+    /// Merges `provider` into the current figment while zipping up vectors.
+    /// See [conflict resolution](#conflict-resolution) for details.
+    ///
+    /// ```rust
+    /// use figment::Figment;
+    /// use figment::util::map;
+    /// use figment::value::Map;
+    ///
+    /// let figment = Figment::new()
+    ///     .join(("string", "original"))
+    ///     .join(("vec", vec!["item 1", "item 2"]))
+    ///     .join(("vec_map", vec![
+    ///         map!["inner_value" => "inner original", "old_inner_value" => "old"],
+    ///         map!["other_value" => "other"]
+    ///     ]));
+    ///
+    /// let new_figment = Figment::new()
+    ///     .join(("string", "replaced"))
+    ///     .join(("vec", vec![None, Some("replaced item 2"), Some("item 3")]))
+    ///     .join(("vec_map", vec![
+    ///         map!["inner_value" => "inner replaced", "new_inner_value" => "new"],
+    ///     ]))
+    ///     .join(("new", "value"));
+    ///
+    /// let figment = figment.zipmerge(new_figment); // **zipmerge**
+    ///
+    /// let string: String = figment.extract_inner("string").unwrap();
+    /// assert_eq!(string, "replaced"); // incoming value replaced existing
+    ///
+    /// let vec: Vec<String> = figment.extract_inner("vec").unwrap();
+    /// assert_eq!(vec, vec!["item 1", "replaced item 2", "item 3"]); // arrays zipped up
+    ///
+    /// let vec_map: Vec<Map<String, String>> = figment.extract_inner("vec_map").unwrap();
+    /// assert_eq!(vec_map, vec![
+    ///     map![ // union of both maps
+    ///         "inner_value".into() => "inner replaced".into(), // incoming value replaced existing
+    ///         "old_inner_value".into() => "old".into(), // existing value retained
+    ///         "new_inner_value".into() => "new".into() // new key added
+    ///     ],
+    ///     map!["other_value".into() => "other".into()] // new array item added
+    /// ]);
+    ///
+    /// let new: String = figment.extract_inner("new").unwrap();
+    /// assert_eq!(new, "value"); // new key added
+    /// ```
+    #[track_caller]
+    pub fn zipmerge<T: Provider>(self, provider: T) -> Self {
+        self.provide(provider, Order::Zipmerge)
     }
 
     /// Sets the profile to extract from to `profile`.

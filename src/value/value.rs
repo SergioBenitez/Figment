@@ -426,6 +426,10 @@ impl Value {
         }
     }
 
+    pub(crate) fn is_none(&self) -> bool {
+        matches!(self, Value::Empty(_, Empty::None))
+    }
+
     /// Attempts to retrieve a nested value through dictionary key or array index.
     pub(crate) fn index(self, key: &str) -> Option<Value> {
         fn try_remove<T>(mut vec: Vec<T>, key: &str) -> Option<T> {
