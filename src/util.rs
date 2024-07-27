@@ -239,7 +239,7 @@ pub mod vec_tuple_map {
     }
 }
 
-use crate::value::{Value, Dict};
+use crate::value::{Dict, Empty, Value};
 
 /// Given a key path `key` of the form `a.b.c`, creates nested dictionaries for
 /// for every path component delimited by `.` in the path string (3 in `a.b.c`),
@@ -270,14 +270,25 @@ use crate::value::{Value, Dict};
 /// ```
 pub fn nest(key: &str, value: Value) -> Value {
     fn value_from(mut keys: std::str::Split<'_, char>, value: Value) -> Value {
-        match keys.next() {
-            Some(k) if !k.is_empty() => {
-                let mut dict = Dict::new();
-                dict.insert(k.into(), value_from(keys, value));
-                dict.into()
-            }
-            Some(_) | None => value
+        let Some(key) = keys.next() else {
+            return value;
+        };
+
+        if let Ok(index) = key.parse::<usize>() {
+            let mut vec = vec![Value::from(Empty::None); index + 1];
+            vec[index] = value_from(keys, value);
+
+            return Value::from(vec);
         }
+
+        if !key.is_empty() {
+            let mut dict = Dict::new();
+            dict.insert(key.into(), value_from(keys, value));
+
+            return dict.into()
+        }
+
+        value
     }
 
     value_from(key.split('.'), value)
