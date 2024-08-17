@@ -238,21 +238,32 @@ impl Env {
     /// considered.
     ///
     /// ```rust
+    /// # use std::collections::BTreeMap;
+    /// # use figment::util::map;
     /// use figment::{Jail, providers::Env};
     ///
     /// Jail::expect_with(|jail| {
     ///     jail.set_env("FOO_FOO", 100);
     ///     jail.set_env("BAR_FOO", "hi");
-    ///     jail.set_env("foobar", "hi");
+    ///     jail.set_env("foo_bar", "hey");
     ///
     ///     // This is like `prefixed("foo_")` without the filtering.
-    ///     let env = Env::raw().map(|k| match k.starts_with("foo_") {
-    ///         true => k["foo_".len()..].into(),
-    ///         false => k.into()
-    ///     });
+    ///     let env = Env::raw()
+    ///         .map(|k| match k.starts_with("foo_") {
+    ///             true => k["foo_".len()..].into(),
+    ///             false => k.into()
+    ///         });
     ///
-    ///     // We now have `FOO=100`, `BAR_FOO=hi`, and `bar=hi`.
-    ///     assert_eq!(env.clone().filter(|k| k == "foo").iter().count(), 1);
+    ///     // We now have `FOO=100`, `BAR_FOO=hi`, and `bar=hey`.
+    ///     # let mut env_vars = env.iter()
+    ///     #     .filter(|(k, _)| k.starts_with("foo") || k.starts_with("bar"))
+    ///     #     .collect::<Vec<_>>();
+    ///     # env_vars.sort_by(|(k1, v1), (k2, v2)| k1.cmp(k2).then(v1.cmp(v2)));
+    ///     assert_eq!(env_vars, [
+    ///         ("bar".into(), "hey".into()),
+    ///         ("BAR_FOO".into(), "hi".into()),
+    ///         ("FOO".into(), "100".into()),
+    ///     ]);
     ///
     ///     // Mappings chain, like iterator adapters.
     ///     let env = env.map(|k| match k.starts_with("bar_") {
@@ -260,8 +271,17 @@ impl Env {
     ///         false => k.into()
     ///     });
     ///
-    ///     // We now have `FOO=100`, `FOO=hi`, and `bar=hi`.
-    ///     assert_eq!(env.filter(|k| k == "foo").iter().count(), 2);
+    ///     // We now have `FOO=100`, `FOO=hi`, and `bar=hey`.
+    ///     # let mut env_vars = env.iter()
+    ///     #     .filter(|(k, _)| k.starts_with("foo") || k.starts_with("bar"))
+    ///     #     .collect::<Vec<_>>();
+    ///     # env_vars.sort_by(|(k1, v1), (k2, v2)| k1.cmp(k2).then(v1.cmp(v2)));
+    ///     assert_eq!(env_vars, [
+    ///         ("bar".into(), "hey".into()),
+    ///         ("FOO".into(), "100".into()),
+    ///         ("FOO".into(), "hi".into()),
+    ///     ]);
+    ///
     ///     Ok(())
     /// });
     /// ```
