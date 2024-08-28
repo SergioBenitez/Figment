@@ -2,7 +2,6 @@
 
 use std::fmt::{self, Display};
 use std::borrow::Cow;
-use std::path::PathBuf;
 
 use serde::{ser, de};
 
@@ -128,9 +127,6 @@ pub enum Kind {
     /// A field appeared more than once: (name). See
     /// [`serde::de::Error::duplicate_field()`].
     DuplicateField(&'static str),
-
-    /// A file marked as required was not present.
-    MissingFile(PathBuf),
 
     /// The `isize` was not in range of any known sized signed integer.
     ISizeOutOfRange(isize),
@@ -463,9 +459,6 @@ impl Display for Kind {
             }
             Kind::DuplicateField(v) => {
                 write!(f, "duplicate field `{}`", v)
-            }
-            Kind::MissingFile(v) => {
-                write!(f, "missing file `{}`", v.to_string_lossy())
             }
             Kind::ISizeOutOfRange(v) => {
                 write!(f, "signed integer `{}` is out of range", v)
