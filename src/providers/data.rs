@@ -4,15 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::de::{self, DeserializeOwned};
 
 use crate::value::{Map, Dict};
-use crate::error::Kind;
 use crate::{Error, Profile, Provider, Metadata};
-
-#[derive(Debug, Clone)]
-enum Source {
-    /// [`Ok`] if the file exists, [`Err`] if not.
-    File(Result<PathBuf, PathBuf>),
-    String(String),
-}
+use crate::error::Kind;
 
 /// A `Provider` that sources values from a file or string in a given
 /// [`Format`].
@@ -53,9 +46,9 @@ enum Source {
 ///     When nesting is _not_ specified, the source file or string is read and
 ///     parsed, and the parsed dictionary is emitted into the profile
 ///     configurable via [`Data::profile()`], which defaults to
-///     [`Profile::Default`]. If the source is a file and the file is not
-///     present, an empty dictionary is emitted, unless it was set to required
-///     using [`Data::required()`].
+///     [`Profile::Default`]. If the source is a file path and the file is not
+///     present, an empty dictionary is emitted unless [`Data::required()`] is
+///     set to `true` in which case the provider fails.
 ///
 ///   * **Data (Nested)**
 ///
@@ -65,21 +58,21 @@ enum Source {
 #[derive(Debug, Clone)]
 pub struct Data<F: Format> {
     source: Source,
-    required: bool,
     /// The profile data will be emitted to if nesting is disabled. Defaults to
     /// [`Profile::Default`].
     pub profile: Option<Profile>,
     _format: PhantomData<F>,
 }
 
+#[derive(Debug, Clone)]
+enum Source {
+    File { path: PathBuf, required: bool, search: bool, },
+    String(String),
+}
+
 impl<F: Format> Data<F> {
-    fn new(source: Source, profile: Option<Profile>) -> Self {
-        Data {
-            source,
-            required: false,
-            profile,
-            _format: PhantomData,
-        }
+    fn new(profile: Option<Profile>, source: Source) -> Self {
+        Data { source, profile, _format: PhantomData }
     }
 
     /// Returns a `Data` provider that sources its values by parsing the file at
@@ -119,69 +112,11 @@ impl<F: Format> Data<F> {
     /// });
     /// ```
     pub fn file<P: AsRef<Path>>(path: P) -> Self {
-        fn find(path: &Path) -> Result<PathBuf, PathBuf> {
-            if path.is_absolute() {
-                return match path.is_file() {
-                    true => Ok(path.to_path_buf()),
-                    false => Err(path.to_path_buf()),
-                };
-            }
-
-            let cwd = std::env::current_dir().map_err(|_| path.to_path_buf())?;
-            let mut cwd = cwd.as_path();
-            loop {
-                let file_path = cwd.join(path);
-                if file_path.is_file() {
-                    return Ok(file_path);
-                }
-
-                cwd = cwd.parent().ok_or_else(|| path.to_path_buf())?;
-            }
-        }
-
-        Data::new(Source::File(find(path.as_ref())), Some(Profile::Default))
-    }
-
-    /// Returns a `Data` provider that sources its values by parsing the file at
-    /// `path` as format `F`. If `path` is relative, it is located relative to
-    /// the current working directory. No other directories are searched.
-    ///
-    /// If you want to search parent directories for `path`, use
-    /// [`Data::file()`] instead.
-    ///
-    /// Nesting is disabled by default. Use [`Data::nested()`] to enable it.
-    ///
-    /// ```rust
-    /// use serde::Deserialize;
-    /// use figment::{Figment, Jail, providers::{Format, Toml}};
-    ///
-    /// #[derive(Debug, PartialEq, Deserialize)]
-    /// struct Config {
-    ///     foo: usize,
-    /// }
-    ///
-    /// Jail::expect_with(|jail| {
-    ///     // Create 'subdir/config.toml' and set `cwd = subdir`.
-    ///     jail.create_file("config.toml", "foo = 123")?;
-    ///     jail.change_dir(jail.create_dir("subdir")?)?;
-    ///
-    ///     // We are in `subdir`. `config.toml` is in `../`. `file()` finds it.
-    ///     let config = Figment::from(Toml::file("config.toml")).extract::<Config>()?;
-    ///     assert_eq!(config.foo, 123);
-    ///
-    ///     // `file_exact()` doesn't search, so it doesn't find it.
-    ///     let config = Figment::from(Toml::file_exact("config.toml")).extract::<Config>();
-    ///     assert!(config.is_err());
-    ///     Ok(())
-    /// });
-    /// ```
-    pub fn file_exact<P: AsRef<Path>>(path: P) -> Self {
-        let file = match path.as_ref().to_owned() {
-            path if path.exists() => Ok(path),
-            path => Err(path),
-        };
-
-        Data::new(Source::File(file), Some(Profile::Default))
+        Data::new(Some(Profile::Default), Source::File {
+            path: path.as_ref().to_path_buf(),
+            required: false,
+            search: true,
+        })
     }
 
     /// Returns a `Data` provider that sources its values by parsing the string
@@ -214,7 +149,16 @@ impl<F: Format> Data<F> {
     /// });
     /// ```
     pub fn string(string: &str) -> Self {
-        Data::new(Source::String(string.into()), Some(Profile::Default))
+        Data::new(Some(Profile::Default), Source::String(string.into()))
+    }
+
+    /// Deprecated alias for `Data::file(path).search(false)`.
+    ///
+    /// Use [`file(path).search(false)`](Data::search) instead.
+    #[doc(hidden)]
+    #[deprecated(since = "0.10.20", note = "use `::file(path).search(false)` instead")]
+    pub fn file_exact<P: AsRef<Path>>(path: P) -> Self {
+        Data::file(path.as_ref()).search(false)
     }
 
     /// Enables nesting on `self`, which results in top-level keys of the
@@ -267,15 +211,23 @@ impl<F: Format> Data<F> {
         self
     }
 
-    /// Sets `self` to require its underlying source file to be present.
-    /// Does nothing for string sources.
+    /// Sets whether the source file is required to be present. The default is
+    /// `false`.
+    ///
+    /// When `false`, a non-existent file is treated as an empty source, that
+    /// is, it deserializes to an empty dictionary. When `true`, a non-existent
+    /// file causes an error. If the source is a string, this setting has no
+    /// effect.
+    ///
+    /// # Example
     ///
     /// ```rust
-    /// use figment::{Figment, Jail, providers::{Format, Toml}};
     /// use serde::Deserialize;
+    /// use figment::{Figment, Jail, providers::{Format, Toml}};
     ///
     /// #[derive(Debug, PartialEq, Deserialize)]
     /// struct Config {
+    ///     #[serde(default)]
     ///     foo: usize,
     /// }
     ///
@@ -283,23 +235,78 @@ impl<F: Format> Data<F> {
     ///     // Create 'config.toml'.
     ///     jail.create_file("config.toml", "foo = 123")?;
     ///
-    ///     // The default behaviour is to permit missing files.
+    ///     // By default, missing files are treated as empty. This implies
+    ///     // `foo` is not set, so it defaults to `0` via `serde(default)`.
+    ///     let config = Figment::from(Toml::file("missing.toml")).extract::<Config>()?;
+    ///     assert_eq!(config.foo, 0);
+    ///
+    ///     // Set `required` to true to disallow missing files.
+    ///     let source = Toml::file("missing.toml");
+    ///     let config = Figment::from(source.required(true)).extract::<Config>();
+    ///     assert!(config.is_err());
+    ///
+    ///     // Set `required` to false to explicitly allow missing files.
+    ///     # let source = Toml::file("missing.toml").required(true);
+    ///     let config = Figment::from(source.required(false)).extract::<Config>()?;
+    ///     assert_eq!(config.foo, 0);
+    ///
+    ///     // The setting has no effect when the file is present.
     ///     let config = Figment::from(Toml::file("config.toml")).extract::<Config>()?;
     ///     assert_eq!(config.foo, 123);
     ///
-    ///     // Setting the file to required works because it is present.
-    ///     let config = Figment::from(Toml::file("config.toml").required(true)).extract::<Config>()?;
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn required(mut self, yes: bool) -> Self {
+        if let Source::File { required, .. } = &mut self.source {
+            *required = yes;
+        }
+
+        self
+    }
+
+    /// Set whether to enable recursively searching in parent directories for
+    /// the source file path. The default is `true`.
+    ///
+    /// When `true`, the search is enabled. When `false` or when the file path
+    /// is absolute, no search is performed and only the exact file path is
+    /// used. If the source is a string, this setting has no effect.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use serde::Deserialize;
+    /// use figment::{Figment, Jail, providers::{Format, Toml}};
+    ///
+    /// #[derive(Debug, PartialEq, Deserialize)]
+    /// struct Config {
+    ///     foo: usize,
+    /// }
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     // Create 'subdir/config.toml' and set `cwd = subdir`.
+    ///     jail.create_file("config.toml", "foo = 123")?;
+    ///     jail.change_dir(jail.create_dir("subdir")?)?;
+    ///
+    ///     // We are in `subdir`. `config.toml` is in `../`. Since `search` is
+    ///     // enabled by default, the file is found in the parent directory.
+    ///     let source = Toml::file("config.toml");
+    ///     let config = Figment::from(source).extract::<Config>()?;
     ///     assert_eq!(config.foo, 123);
     ///
-    ///     // Setting a missing file to required causes extract to error.
-    ///     let config = Figment::from(Toml::file("doesntexist.toml").required(true)).extract::<Config>();
+    ///     // Set `search` to false to disable searching.
+    ///     let source = Toml::file("config.toml").search(false);
+    ///     let config = Figment::from(source).extract::<Config>();
     ///     assert!(config.is_err());
     ///
     ///     Ok(())
     /// });
     /// ```
-    pub fn required(mut self, required: bool) -> Self {
-        self.required = required;
+    pub fn search(mut self, enabled: bool) -> Self {
+        if let Source::File { search, .. } = &mut self.source {
+            *search = enabled;
+        }
+
         self
     }
 
@@ -324,26 +331,58 @@ impl<F: Format> Data<F> {
         self.profile = Some(profile.into());
         self
     }
+
+    /// Resolves `path` to a valid file path or returns `None`. If `search` is
+    /// `true` and `path` is not absolute, searches the current working
+    /// directory and all parent directories until the root and return the first
+    /// valid file path. Otherwise returns `path` if it points to a valid file.
+    fn resolve(path: &Path, search: bool) -> Option<PathBuf> {
+        if path.is_absolute() || !search {
+            return path.is_file().then(|| path.to_path_buf());
+        }
+
+        let cwd = std::env::current_dir().ok()?;
+        let mut cwd = cwd.as_path();
+        loop {
+            let file_path = cwd.join(path);
+            if file_path.is_file() {
+                return Some(file_path.into());
+            }
+
+            cwd = cwd.parent()?;
+        }
+    }
 }
 
 impl<F: Format> Provider for Data<F> {
     fn metadata(&self) -> Metadata {
-        use Source as S;
+        use Source::*;
         match &self.source {
-            S::String(_) => Metadata::named(format!("{} source string", F::NAME)),
-            S::File(Err(_)) => Metadata::named(format!("{} file", F::NAME)),
-            S::File(Ok(p)) => Metadata::from(format!("{} file", F::NAME), &**p),
+            String(_) => Metadata::named(format!("{} source string", F::NAME)),
+            File { path, search, required: _ } => {
+                let path = Self::resolve(path, *search).unwrap_or_else(|| path.clone());
+                Metadata::from(format!("{} file", F::NAME), path.as_path())
+            }
         }
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
         use Source as S;
         let map: Result<Map<Profile, Dict>, _> = match (&self.source, &self.profile) {
-            (S::File(Err(path)), _) if self.required => return Err(Kind::MissingFile(path.clone()).into()),
-            (S::File(Err(_)), _) => return Ok(Map::new()),
-            (S::File(Ok(path)), None) => F::from_path(path),
+            (S::File { path, required, search }, profile) => {
+                match Self::resolve(path, *search) {
+                    Some(path) => match profile {
+                        Some(prof) => F::from_path(&path).map(|v| prof.collect(v)),
+                        None => F::from_path(&path),
+                    },
+                    None if !required => Ok(Map::new()),
+                    None => {
+                        let msg = format!("required file `{}` not found", path.display());
+                        return Err(Kind::Message(msg).into());
+                    }
+                }
+            },
             (S::String(s), None) => F::from_str(s),
-            (S::File(Ok(path)), Some(prof)) => F::from_path(path).map(|v| prof.collect(v)),
             (S::String(s), Some(prof)) => F::from_str(s).map(|v| prof.collect(v)),
         };
 
@@ -388,8 +427,8 @@ impl<F: Format> Provider for Data<F> {
 ///
 ///   2. [`Format::from_str()`]: This is the core string deserialization method.
 ///      A typical implementation will simply call an existing method like
-///      [`toml::from_str`]. For writing a custom data format, see [serde's
-///      writing a data format guide].
+///      [`toml_edit::de::from_str`]. For writing a custom data format, see
+///      [serde's writing a data format guide].
 ///
 /// The default implementations for [`Format::from_path()`], [`Format::file()`],
 /// and [`Format::string()`] methods should likely not be overwritten.
@@ -410,18 +449,20 @@ pub trait Format: Sized {
         Data::file(path)
     }
 
-    /// Returns a `Data` provider that sources its values by parsing the file at
-    /// `path` as format `Self`. See [`Data::file_exact()`] for more details. The
-    /// default implementation calls `Data::file_exact(path)`.
-    fn file_exact<P: AsRef<Path>>(path: P) -> Data<Self> {
-        Data::file_exact(path)
-    }
-
     /// Returns a `Data` provider that sources its values by parsing `string` as
     /// format `Self`. See [`Data::string()`] for more details. The default
     /// implementation calls `Data::string(string)`.
     fn string(string: &str) -> Data<Self> {
         Data::string(string)
+    }
+
+    /// Deprecated alias for `file(path).search(false)`.
+    ///
+    /// Use [`file(path).search(false)`](Data::search) instead.
+    #[doc(hidden)]
+    #[deprecated(since = "0.10.20", note = "use `::file(path).search(false)` instead")]
+    fn file_exact<P: AsRef<Path>>(path: P) -> Data<Self> {
+        Data::file(path.as_ref()).search(false)
     }
 
     /// Parses `string` as the data format `Self` as a `T` or returns an error
