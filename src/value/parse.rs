@@ -16,7 +16,7 @@ pub enum Error {
     Eof,
 }
 
-type Result<'a, T> = std::result::Result<T, Error>;
+type Result<T> = std::result::Result<T, Error>;
 
 impl<'a> Parser<'a> {
     fn new(cursor: &'a str) -> Self {
@@ -24,7 +24,11 @@ impl<'a> Parser<'a> {
     }
 
     fn peek(&self, c: char) -> bool {
-        self.cursor.chars().next() == Some(c)
+        self.peek_next() == Some(c)
+    }
+
+    fn eof(&self) -> bool {
+        self.cursor.is_empty()
     }
 
     fn peek_next(&self) -> Option<char> {
@@ -104,46 +108,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn dict(&mut self) -> Result<Dict> {
-        self.eat('{')?;
+    fn delimited<T, V, F>(&mut self, start: char, end: char, value: F) -> Result<T>
+        where T: Extend<V> + Default, F: Fn(&mut Self) -> Result<V>,
+    {
+        let mut collection = T::default();
+        self.eat(start)?;
+        self.skip_whitespace();
 
-        let mut dict = Dict::new();
-        loop {
+        while !self.peek(end) {
+            collection.extend(Some(value(self)?));
+
             self.skip_whitespace();
-            if self.eat('}').is_ok() {
+            if self.eat(',').is_err() {
                 break;
             }
 
-            let key = self.key()?;
             self.skip_whitespace();
-            self.eat('=')?;
-            self.skip_whitespace();
-            let value = self.value()?;
-            dict.insert(key.to_string(), value);
-
-            self.skip_whitespace();
-            let _ = self.eat(',');
         }
 
-        Ok(dict)
+        self.eat(end)?;
+        Ok(collection)
+    }
+
+    fn dict(&mut self) -> Result<Dict> {
+        self.delimited('{', '}', |parser| {
+            let key = parser.key()?;
+            (parser.skip_whitespace(), parser.eat('=')?, parser.skip_whitespace());
+            let value = parser.value()?;
+            Ok((key.to_string(), value))
+        })
     }
 
     fn array(&mut self) -> Result<Vec<Value>> {
-        self.eat('[')?;
-        let mut values = Vec::new();
-
-        loop {
-            self.skip_whitespace();
-            if self.eat(']').is_ok() {
-                break;
-            }
-
-            values.push(self.value()?);
-            self.skip_whitespace();
-            let _ = self.eat(',');
-        }
-
-        Ok(values)
+        self.delimited('[', ']', |parser| parser.value())
     }
 
     fn value(&mut self) -> Result<Value> {
@@ -152,6 +149,7 @@ impl<'a> Parser<'a> {
             !matches!(byte, ',' | '{' | '}' | '[' | ']')
         }
 
+        self.skip_whitespace();
         let value = match self.peek_next() {
             Some('"') => Value::from(self.quoted_str()?.to_string()),
             Some('\'') => Value::from(self.quoted_char()?),
@@ -187,11 +185,12 @@ impl<'a> Parser<'a> {
 impl std::str::FromStr for Value {
     type Err = std::convert::Infallible;
 
-    fn from_str(s: &str) -> std::result::Result<Self, std::convert::Infallible> {
-        let mut parser = Parser::new(s.trim());
+    fn from_str(string: &str) -> std::result::Result<Self, std::convert::Infallible> {
+        let string = string.trim();
+        let mut parser = Parser::new(string);
         match parser.value() {
-            Ok(value) => Ok(value),
-            Err(_) => Ok(Value::from(s)),
+            Ok(value) if parser.eof() => Ok(value),
+            _ => Ok(Value::from(string)),
         }
     }
 }
@@ -231,6 +230,8 @@ mod tests {
             " -0" => 0i8,
             " -2" => -2,
             " 123 " => 123u8,
+            "a,b" => "a,b",
+            "   a,b" => "a,b",
             "\"a\"" => "a",
             "a " => "a",
             "   a " => "a",
@@ -238,6 +239,10 @@ mod tests {
             "\"a  \"" => "a  ",
             "\" a  \"" => " a  ",
             "1.2" => 1.2,
+            "[" => "[",
+            "[a" => "[a",
+            "[a b" => "[a b",
+            "]" => "]",
             "  1.2" => 1.2,
             "3.14159" => 3.14159,
             "\"\\t\"" => "\t",
@@ -263,6 +268,9 @@ mod tests {
             "[1,2,3]" => vec![1u8, 2u8, 3u8],
             "[ 1 , 2   ,3]" => vec![1u8, 2u8, 3u8],
             " [ 1 , 2   , 3  ] " => vec![1u8, 2u8, 3u8],
+            " [ a , b   ,, d  ] " => vec!["a", "b", "", "d"],
+            " [ a , b   c,] " => vec!["a", "b   c"],
+            " [ a , b   c,,] " => vec!["a", "b   c", ""],
             "{a=b}" => map!["a" => "b"],
             " { a = b } " => map!["a" => "b"],
             "{\"a\"=b}" => map!["a" => "b"],
