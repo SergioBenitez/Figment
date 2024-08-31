@@ -25,9 +25,9 @@ use crate::coalesce::{Coalescible, Order};
 /// resolved via one of six strategies: [`join`], [`adjoin`], [`zipjoin`],
 /// [`merge`], [`admerge`], and [`zipmerge`]. In general, the `-join` strategies
 /// prefer existing values while the `-merge` strategies prefer later values.
-/// The `ad-` strategies additionally concatenate arrays, the `zip-` strategies
-/// combine both of the first items, both of the second items and so on, whereas
-/// the unprefixed strategies treat arrays as non-composite values.
+/// The `ad-` strategies additionally concatenate arrays; the `zip-` strategies
+/// treat array indices as keys resulting in index-wise joining (for zipjoin)
+/// or merging (for zipmerge) arrays while preserving all excess elements.
 ///
 /// The table below summarizes these strategies and their behavior, with the
 /// column label referring to the type of the value pointed to by the
@@ -53,7 +53,8 @@ use crate::coalesce::{Coalescible, Order};
 ///   * `join` uses the existing value
 ///   * `merge` uses the incoming value
 ///   * `adjoin` and `admerge` concatenate the arrays
-///   * `zipjoin` and `zipmerge` combine array items with equal index
+///   * `zipjoin` index-wise joins the arrays and keeps excess values
+///   * `zipmerge` index-wise merges the arrays and keeps excess values
 ///
 /// If both keys point to a **non-composite** (`String`, `Num`, etc.) or values
 /// of different kinds (i.e, **array** and **num**):

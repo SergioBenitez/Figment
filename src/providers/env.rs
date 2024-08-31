@@ -76,6 +76,10 @@ crate::util::cloneable_fn_trait!(
 /// environment variable `Value`. For example, the environment variable
 /// `a.b.c=3` creates the mapping `a -> b -> c -> 3` in the emitted data.
 ///
+/// The created dictionaries are then zipmerged, which allows multiple variables
+/// like `array.2=24` to form one array, as well as overwriting single values in
+/// existing arrays.
+///
 /// Environment variable names cannot typically contain the `.` character, but
 /// another character can be used in its place by replacing that character in
 /// the name with `.` with [`Env::map()`]. The [`Env::split()`] method is a
@@ -410,8 +414,6 @@ impl Env {
     ///         map: map!["one".into() => 1u8.into(), "two".into() => 2.0.into()],
     ///         array: vec![1, 2, 3],
     ///     });
-    ///
-    ///     jail.clear_env();
     ///
     ///     // With splitting.
     ///     jail.set_env("APP_FOO_KEY", 20);
