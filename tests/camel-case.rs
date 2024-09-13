@@ -1,11 +1,11 @@
-use figment::{Figment, providers::Env};
+use figment::{providers::Env, Figment};
 
 #[test]
 fn camel_case() {
     #[derive(serde::Deserialize, PartialEq, Debug)]
     #[serde(rename_all = "camelCase")]
     struct Config {
-        top_key_1: i32
+        top_key_1: i32,
     }
 
     figment::Jail::expect_with(|jail| {

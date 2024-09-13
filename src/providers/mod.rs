@@ -3,10 +3,10 @@
 //! The [top-level docs](crate#built-in-providers) contain a list and
 //! description of each provider.
 
-mod serialized;
 mod data;
 mod env;
+mod serialized;
 
+pub use self::data::*;
 pub use self::env::Env;
 pub use self::serialized::Serialized;
-pub use self::data::*;

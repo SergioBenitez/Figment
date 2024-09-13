@@ -6,6 +6,12 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  cargo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --all -- --check
   test:
     name: "${{ matrix.os.name }} ${{ matrix.test.name }} (${{ matrix.toolchain }})"
     continue-on-error: false

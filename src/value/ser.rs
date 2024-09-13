@@ -1,13 +1,13 @@
 use serde::{ser, Serialize, Serializer};
 
 use crate::error::{Error, Kind};
-use crate::value::{Value, Dict, Num, Empty};
+use crate::value::{Dict, Empty, Num, Value};
 
 type Result<T> = std::result::Result<T, Error>;
 
 impl Serialize for Value {
     fn serialize<S: Serializer>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> {
-        use ser::{SerializeSeq, SerializeMap};
+        use ser::{SerializeMap, SerializeSeq};
 
         match self {
             Value::String(_, v) => ser.serialize_str(v),
@@ -68,20 +68,22 @@ impl Serialize for Empty {
 pub struct ValueSerializer;
 
 macro_rules! serialize_fn {
-    ($name:ident: $T:ty => $V:path) => (
-        fn $name(self, v: $T) -> Result<Self::Ok> { Ok(v.into()) }
-    )
+    ($name:ident: $T:ty => $V:path) => {
+        fn $name(self, v: $T) -> Result<Self::Ok> {
+            Ok(v.into())
+        }
+    };
 }
 
 pub struct SeqSerializer {
     tag: Option<&'static str>,
-    sequence: Vec<Value>
+    sequence: Vec<Value>,
 }
 
 pub struct MapSerializer {
     tag: Option<&'static str>,
     keys: Vec<String>,
-    values: Vec<Value>
+    values: Vec<Value>,
 }
 
 impl Serializer for ValueSerializer {
@@ -133,11 +135,7 @@ impl Serializer for ValueSerializer {
         Ok(MapSerializer::new(None, len))
     }
 
-    fn serialize_struct(
-        self,
-        _name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStruct> {
+    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
         Ok(MapSerializer::new(None, Some(len)))
     }
 
@@ -152,7 +150,8 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         value.serialize(self)
     }
@@ -166,12 +165,9 @@ impl Serializer for ValueSerializer {
         self.serialize_str(variant)
     }
 
-    fn serialize_newtype_struct<T: ?Sized>(
-        self,
-        _name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok>
-        where T: Serialize
+    fn serialize_newtype_struct<T: ?Sized>(self, _name: &'static str, value: &T) -> Result<Self::Ok>
+    where
+        T: Serialize,
     {
         value.serialize(self)
     }
@@ -219,7 +215,6 @@ impl Serializer for ValueSerializer {
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok> {
         self.serialize_unit()
     }
-
 }
 
 impl SeqSerializer {
@@ -236,7 +231,8 @@ impl ser::SerializeSeq for SeqSerializer {
     type Error = Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         self.sequence.push(value.serialize(ValueSerializer)?);
         Ok(())
@@ -246,7 +242,7 @@ impl ser::SerializeSeq for SeqSerializer {
         let value: Value = self.sequence.into();
         match self.tag {
             Some(tag) => Ok(crate::util::map![tag => value].into()),
-            None => Ok(value)
+            None => Ok(value),
         }
     }
 }
@@ -256,7 +252,8 @@ impl ser::SerializeTuple for SeqSerializer {
     type Error = Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeSeq::serialize_element(self, value)
     }
@@ -272,7 +269,8 @@ impl ser::SerializeTupleStruct for SeqSerializer {
     type Error = Error;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeSeq::serialize_element(self, value)
     }
@@ -287,7 +285,8 @@ impl ser::SerializeTupleVariant for SeqSerializer {
     type Error = Error;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeSeq::serialize_element(self, value)
     }
@@ -312,7 +311,8 @@ impl ser::SerializeMap for MapSerializer {
     type Error = Error;
 
     fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         match key.serialize(ValueSerializer)? {
             Value::String(_, s) => self.keys.push(s),
@@ -323,7 +323,8 @@ impl ser::SerializeMap for MapSerializer {
     }
 
     fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         self.values.push(value.serialize(ValueSerializer)?);
         Ok(())
@@ -334,7 +335,7 @@ impl ser::SerializeMap for MapSerializer {
         let value: Value = iter.collect::<Dict>().into();
         match self.tag {
             Some(tag) => Ok(crate::util::map![tag => value].into()),
-            None => Ok(value)
+            None => Ok(value),
         }
     }
 }
@@ -344,7 +345,8 @@ impl ser::SerializeStruct for MapSerializer {
     type Error = Error;
 
     fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeMap::serialize_key(self, key)?;
         ser::SerializeMap::serialize_value(self, value)
@@ -360,7 +362,8 @@ impl ser::SerializeStructVariant for MapSerializer {
     type Error = Error;
 
     fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
-        where T: Serialize
+    where
+        T: Serialize,
     {
         ser::SerializeMap::serialize_key(self, key)?;
         ser::SerializeMap::serialize_value(self, value)

@@ -1,5 +1,8 @@
+use figment::{
+    providers::{Format, Toml},
+    Figment,
+};
 use serde::Deserialize;
-use figment::{Figment, providers::{Toml, Format}};
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
@@ -19,10 +22,11 @@ static TOML: &str = r##"
 #[test]
 fn lossy_values() {
     let config: Config = Figment::from(Toml::string(TOML)).extract_lossy().unwrap();
-    assert_eq!(&config.u8s, &[ 1, 2, 3, 4, 5, 6 ]);
+    assert_eq!(&config.u8s, &[1, 2, 3, 4, 5, 6]);
     assert_eq!(&config.i32s, &[-1, -2, 3, -4, 5, 6]);
     assert_eq!(&config.f64s, &[1.0, 2.0, -3.0, -4.5, 5.0, -6.0]);
-    assert_eq!(&config.bs, &[
-        true, false, true, false, true, false, true, false, true, false, true, false
-    ]);
+    assert_eq!(
+        &config.bs,
+        &[true, false, true, false, true, false, true, false, true, false, true, false]
+    );
 }

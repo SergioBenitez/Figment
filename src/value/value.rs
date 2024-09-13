@@ -4,8 +4,8 @@ use std::str::{FromStr, Split};
 
 use serde::Serialize;
 
-use crate::value::{Tag, ValueSerializer, magic::Either};
-use crate::error::{Error, Actual};
+use crate::error::{Actual, Error};
+use crate::value::{magic::Either, Tag, ValueSerializer};
 
 /// An alias to the type of map used in [`Value::Dict`].
 pub type Map<K, V> = BTreeMap<K, V>;
@@ -140,7 +140,7 @@ impl Value {
         fn find(mut keys: Split<char>, value: Value) -> Option<Value> {
             match keys.next() {
                 Some(k) if !k.is_empty() => find(keys, value.into_dict()?.remove(k)?),
-                Some(_) | None => Some(value)
+                Some(_) | None => Some(value),
             }
         }
 
@@ -180,7 +180,7 @@ impl Value {
         fn find<'v>(mut keys: Split<char>, value: &'v Value) -> Option<&'v Value> {
             match keys.next() {
                 Some(k) if !k.is_empty() => find(keys, value.as_dict()?.get(k)?),
-                Some(_) | None => Some(value)
+                Some(_) | None => Some(value),
             }
         }
 
@@ -322,8 +322,8 @@ impl Value {
             Value::Num(_, num) => match num.to_u128_lossy() {
                 Some(0) => Some(false),
                 Some(1) => Some(true),
-                _ => None
-            }
+                _ => None,
+            },
             Value::String(_, s) => {
                 const TRUE: &[&str] = &["true", "yes", "1", "on"];
                 const FALSE: &[&str] = &["false", "no", "0", "off"];
@@ -335,7 +335,7 @@ impl Value {
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         }
     }
@@ -407,7 +407,8 @@ impl Value {
     }
 
     pub(crate) fn map_tag<F>(&mut self, mut f: F)
-        where F: FnMut(&mut Tag) + Copy
+    where
+        F: FnMut(&mut Tag) + Copy,
     {
         if *self.tag_mut() == Tag::Default {
             f(self.tag_mut());
@@ -472,7 +473,10 @@ impl From<&str> for Value {
 
 impl<'a, T: Into<Value> + Clone> From<&'a [T]> for Value {
     fn from(value: &'a [T]) -> Value {
-        Value::Array(Tag::Default, value.iter().map(|v| v.clone().into()).collect())
+        Value::Array(
+            Tag::Default,
+            value.iter().map(|v| v.clone().into()).collect(),
+        )
     }
 }
 
@@ -485,7 +489,8 @@ impl<T: Into<Value>> From<Vec<T>> for Value {
 
 impl<K: AsRef<str>, V: Into<Value>> From<Map<K, V>> for Value {
     fn from(map: Map<K, V>) -> Value {
-        let dict: Dict = map.into_iter()
+        let dict: Dict = map
+            .into_iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.into()))
             .collect();
 
@@ -759,7 +764,7 @@ pub enum Empty {
     /// Like `Option::None`.
     None,
     /// Like `()`.
-    Unit
+    Unit,
 }
 
 impl Empty {

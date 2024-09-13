@@ -1,8 +1,8 @@
-use figment::{Figment, providers::Env};
+use figment::{providers::Env, Figment};
 
 #[derive(serde::Deserialize)]
 struct Config {
-    foo: String
+    foo: String,
 }
 
 #[test]
@@ -24,18 +24,18 @@ fn empty_env_vars() {
         assert!(config.is_err());
 
         let config = Figment::new()
-            .merge(Env::raw().map(|k| {
-                if k == "foo" { k.into() }
-                else { "".into() }
-            }))
+            .merge(Env::raw().map(|k| if k == "foo" { k.into() } else { "".into() }))
             .extract::<Config>()?;
 
         assert_eq!(config.foo, "bar");
 
         let config = Figment::new()
             .merge(Env::raw().map(|k| {
-                if k == "foo" { "   foo   ".into() }
-                else { "".into() }
+                if k == "foo" {
+                    "   foo   ".into()
+                } else {
+                    "".into()
+                }
             }))
             .extract::<Config>()?;
 

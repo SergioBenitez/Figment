@@ -1,5 +1,8 @@
+use figment::{
+    providers::{Env, Format, Serialized, Toml},
+    Figment,
+};
 use serde::{Deserialize, Serialize};
-use figment::{Figment, providers::{Format, Toml, Serialized, Env}};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
@@ -11,13 +14,13 @@ pub struct Config {
 #[derive(PartialEq, Debug, Deserialize, Serialize)]
 pub enum Foo {
     Mega,
-    Supa
+    Supa,
 }
 
 #[derive(PartialEq, Debug, Deserialize, Serialize)]
 pub enum Bar {
     None,
-    Some(usize, String)
+    Some(usize, String),
 }
 
 #[derive(PartialEq, Debug, Deserialize, Serialize)]
@@ -29,14 +32,16 @@ pub enum Baz {
 
 #[test]
 fn test_enum_de() {
-    let figment = || Figment::new()
-        .merge(Serialized::defaults(Config {
-            foo: None,
-            bar: Some(Bar::Some(9999, "not-the-string".into())),
-            baz: None
-        }))
-        .merge(Toml::file("Test.toml"))
-        .merge(Env::prefixed("TEST_"));
+    let figment = || {
+        Figment::new()
+            .merge(Serialized::defaults(Config {
+                foo: None,
+                bar: Some(Bar::Some(9999, "not-the-string".into())),
+                baz: None,
+            }))
+            .merge(Toml::file("Test.toml"))
+            .merge(Env::prefixed("TEST_"))
+    };
 
     figment::Jail::expect_with(|jail| {
         let test: Config = figment().extract()?;
@@ -44,13 +49,16 @@ fn test_enum_de() {
         assert_eq!(test.bar, Some(Bar::Some(9999, "not-the-string".into())));
         assert_eq!(test.baz, None);
 
-        jail.create_file("Test.toml", r#"
+        jail.create_file(
+            "Test.toml",
+            r#"
             foo = "Mega"
             baz = "goobar"
 
             [bar]
             Some = [10, "hi"]
-        "#)?;
+        "#,
+        )?;
 
         let test: Config = figment().extract()?;
         assert_eq!(test.foo, Some(Foo::Mega));

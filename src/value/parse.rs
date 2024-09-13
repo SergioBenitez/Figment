@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::value::{Value, Dict, escape::escape};
+use crate::value::{escape::escape, Dict, Value};
 
 use super::Empty;
 
@@ -37,7 +37,8 @@ impl<'a> Parser<'a> {
 
     #[inline]
     fn eat_if<F>(&mut self, f: F) -> Option<char>
-        where F: FnOnce(&char) -> bool,
+    where
+        F: FnOnce(&char) -> bool,
     {
         match self.cursor.chars().next() {
             Some(ch) if f(&ch) => {
@@ -62,9 +63,12 @@ impl<'a> Parser<'a> {
     }
 
     fn substr<F>(&mut self, f: F) -> Result<&'a str>
-        where F: FnMut(&char) -> bool,
+    where
+        F: FnMut(&char) -> bool,
     {
-        let len = self.cursor.chars()
+        let len = self
+            .cursor
+            .chars()
             .take_while(f)
             .map(|c| c.len_utf8())
             .sum();
@@ -86,8 +90,14 @@ impl<'a> Parser<'a> {
 
         let mut is_escaped = false;
         let inner = self.substr(|&c: &char| -> bool {
-            if is_escaped { is_escaped = false; return true; }
-            if c == '\\' { is_escaped = true; return true; }
+            if is_escaped {
+                is_escaped = false;
+                return true;
+            }
+            if c == '\\' {
+                is_escaped = true;
+                return true;
+            }
             c != '"'
         })?;
 
@@ -109,7 +119,9 @@ impl<'a> Parser<'a> {
     }
 
     fn delimited<T, V, F>(&mut self, start: char, end: char, value: F) -> Result<T>
-        where T: Extend<V> + Default, F: Fn(&mut Self) -> Result<V>,
+    where
+        T: Extend<V> + Default,
+        F: Fn(&mut Self) -> Result<V>,
     {
         let mut collection = T::default();
         self.eat(start)?;
@@ -133,7 +145,11 @@ impl<'a> Parser<'a> {
     fn dict(&mut self) -> Result<Dict> {
         self.delimited('{', '}', |parser| {
             let key = parser.key()?;
-            (parser.skip_whitespace(), parser.eat('=')?, parser.skip_whitespace());
+            (
+                parser.skip_whitespace(),
+                parser.eat('=')?,
+                parser.skip_whitespace(),
+            );
             let value = parser.value()?;
             Ok((key.to_string(), value))
         })
@@ -262,7 +278,9 @@ mod tests {
 
     #[test]
     fn check_compund_values_parse() {
-        fn v<T: Into<Value>>(v: T) -> Value { v.into() }
+        fn v<T: Into<Value>>(v: T) -> Value {
+            v.into()
+        }
 
         assert_parse_eq! {
             "[1,2,3]" => vec![1u8, 2u8, 3u8],

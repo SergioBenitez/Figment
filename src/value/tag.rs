@@ -1,8 +1,8 @@
 use std::fmt;
 use std::sync::atomic::Ordering;
 
-use serde::{de, ser};
 use crate::profile::{Profile, ProfileTag};
+use serde::{de, ser};
 /// An opaque, unique tag identifying a value's [`Metadata`](crate::Metadata)
 /// and profile.
 ///
@@ -106,7 +106,7 @@ impl PartialEq for Tag {
     }
 }
 
-impl Eq for Tag {  }
+impl Eq for Tag {}
 
 impl Ord for Tag {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -134,7 +134,8 @@ impl From<Tag> for crate::value::Value {
 
 impl<'de> de::Deserialize<'de> for Tag {
     fn deserialize<D>(deserializer: D) -> Result<Tag, D::Error>
-        where D: de::Deserializer<'de>
+    where
+        D: de::Deserializer<'de>,
     {
         struct Visitor;
 
@@ -164,7 +165,7 @@ impl fmt::Debug for Tag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             t if t.is_default() => write!(f, "Tag::Default"),
-            _ => write!(f, "Tag({:?}, {})", self.profile_tag(), self.metadata_id())
+            _ => write!(f, "Tag({:?}, {})", self.profile_tag(), self.metadata_id()),
         }
     }
 }

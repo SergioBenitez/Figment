@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 
 use serde::de::{self, DeserializeOwned};
 
-use crate::value::{Map, Dict};
-use crate::{Error, Profile, Provider, Metadata};
 use crate::error::Kind;
+use crate::value::{Dict, Map};
+use crate::{Error, Metadata, Profile, Provider};
 
 /// A `Provider` that sources values from a file or string in a given
 /// [`Format`].
@@ -66,13 +66,21 @@ pub struct Data<F: Format> {
 
 #[derive(Debug, Clone)]
 enum Source {
-    File { path: PathBuf, required: bool, search: bool, },
+    File {
+        path: PathBuf,
+        required: bool,
+        search: bool,
+    },
     String(String),
 }
 
 impl<F: Format> Data<F> {
     fn new(profile: Option<Profile>, source: Source) -> Self {
-        Data { source, profile, _format: PhantomData }
+        Data {
+            source,
+            profile,
+            _format: PhantomData,
+        }
     }
 
     /// Returns a `Data` provider that sources its values by parsing the file at
@@ -112,11 +120,14 @@ impl<F: Format> Data<F> {
     /// });
     /// ```
     pub fn file<P: AsRef<Path>>(path: P) -> Self {
-        Data::new(Some(Profile::Default), Source::File {
-            path: path.as_ref().to_path_buf(),
-            required: false,
-            search: true,
-        })
+        Data::new(
+            Some(Profile::Default),
+            Source::File {
+                path: path.as_ref().to_path_buf(),
+                required: false,
+                search: true,
+            },
+        )
     }
 
     /// Returns a `Data` provider that sources its values by parsing the string
@@ -359,7 +370,11 @@ impl<F: Format> Provider for Data<F> {
         use Source::*;
         match &self.source {
             String(_) => Metadata::named(format!("{} source string", F::NAME)),
-            File { path, search, required: _ } => {
+            File {
+                path,
+                search,
+                required: _,
+            } => {
                 let path = Self::resolve(path, *search).unwrap_or_else(|| path.clone());
                 Metadata::from(format!("{} file", F::NAME), path.as_path())
             }
@@ -369,17 +384,22 @@ impl<F: Format> Provider for Data<F> {
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
         use Source as S;
         let map: Result<Map<Profile, Dict>, _> = match (&self.source, &self.profile) {
-            (S::File { path, required, search }, profile) => {
-                match Self::resolve(path, *search) {
-                    Some(path) => match profile {
-                        Some(prof) => F::from_path(&path).map(|v| prof.collect(v)),
-                        None => F::from_path(&path),
-                    },
-                    None if !required => Ok(Map::new()),
-                    None => {
-                        let msg = format!("required file `{}` not found", path.display());
-                        return Err(Kind::Message(msg).into());
-                    }
+            (
+                S::File {
+                    path,
+                    required,
+                    search,
+                },
+                profile,
+            ) => match Self::resolve(path, *search) {
+                Some(path) => match profile {
+                    Some(prof) => F::from_path(&path).map(|v| prof.collect(v)),
+                    None => F::from_path(&path),
+                },
+                None if !required => Ok(Map::new()),
+                None => {
+                    let msg = format!("required file `{}` not found", path.display());
+                    return Err(Kind::Message(msg).into());
                 }
             },
             (S::String(s), None) => F::from_str(s),

@@ -51,7 +51,7 @@ impl From<&Profile> for ProfileTag {
         match profile {
             p if p == Profile::Default => ProfileTag::Default,
             p if p == Profile::Global => ProfileTag::Global,
-            _ => ProfileTag::Custom
+            _ => ProfileTag::Custom,
         }
     }
 }
@@ -275,7 +275,8 @@ impl PartialEq<&Profile> for Profile {
 
 impl<'de> de::Deserialize<'de> for Profile {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: serde::Deserializer<'de>
+    where
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 

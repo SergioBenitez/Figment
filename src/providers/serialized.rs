@@ -2,9 +2,9 @@ use std::panic::Location;
 
 use serde::Serialize;
 
-use crate::{Profile, Provider, Metadata};
 use crate::error::{Error, Kind::InvalidType};
-use crate::value::{Value, Map, Dict};
+use crate::value::{Dict, Map, Value};
+use crate::{Metadata, Profile, Provider};
 
 /// A `Provider` that sources values directly from a serialize type.
 ///
@@ -79,7 +79,7 @@ impl<T> Serialized<T> {
             value,
             key: None,
             profile: profile.into(),
-            loc: Location::caller()
+            loc: Location::caller(),
         }
     }
 

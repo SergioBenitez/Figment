@@ -1,7 +1,7 @@
-use std::fmt;
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
+use std::fmt;
 use std::panic::Location;
+use std::path::{Path, PathBuf};
 
 use crate::Profile;
 
@@ -94,7 +94,9 @@ impl Metadata {
     /// ```
     #[inline(always)]
     pub fn from<N, S>(name: N, source: S) -> Self
-        where N: Into<Cow<'static, str>>, S: Into<Source>
+    where
+        N: Into<Cow<'static, str>>,
+        S: Into<Source>,
     {
         Metadata::named(name).source(source)
     }
@@ -112,7 +114,10 @@ impl Metadata {
     /// ```
     #[inline]
     pub fn named<T: Into<Cow<'static, str>>>(name: T) -> Self {
-        Metadata { name: name.into(), ..Metadata::default() }
+        Metadata {
+            name: name.into(),
+            ..Metadata::default()
+        }
     }
 
     /// Sets the `source` of `self` to `Some(source)`.
@@ -155,7 +160,8 @@ impl Metadata {
     /// ```
     #[inline(always)]
     pub fn interpolater<I: Clone + Send + Sync + 'static>(mut self, f: I) -> Self
-        where I: Fn(&Profile, &[&str]) -> String
+    where
+        I: Fn(&Profile, &[&str]) -> String,
     {
         self.interpolater = Box::new(f);
         self
@@ -262,7 +268,7 @@ impl Source {
     pub fn code_location(&self) -> Option<&'static Location<'static>> {
         match self {
             Source::Code(s) => Some(s),
-            _ => None
+            _ => None,
         }
     }
     /// Returns the custom source location if `self` is `Source::Custom`.
@@ -290,11 +296,11 @@ impl fmt::Display for Source {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Source::File(p) => {
-                use {std::env::current_dir, crate::util::diff_paths};
+                use {crate::util::diff_paths, std::env::current_dir};
 
                 match current_dir().ok().and_then(|cwd| diff_paths(p, cwd)) {
                     Some(r) if r.iter().count() < p.iter().count() => r.display().fmt(f),
-                    Some(_) | None => p.display().fmt(f)
+                    Some(_) | None => p.display().fmt(f),
                 }
             }
             Source::Code(l) => l.fmt(f),

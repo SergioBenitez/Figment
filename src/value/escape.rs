@@ -44,13 +44,13 @@ pub fn escape(string: &str) -> Result<Cow<'_, str>, Error> {
                     Some((i, c)) => return Err(Error::InvalidEscape(i, c)),
                     None => return Err(Error::UnterminatedString(0)),
                 }
-            },
+            }
             ch if ch == '\u{09}' || ('\u{20}' <= ch && ch <= '\u{10ffff}' && ch != '\u{7f}') => {
                 // if we haven't allocated, the string contains the value
                 if let Cow::Owned(ref mut val) = output {
                     val.push(ch);
                 }
-            },
+            }
             _ => return Err(Error::InvalidCharInString(i, ch)),
         }
     }
@@ -59,7 +59,8 @@ pub fn escape(string: &str) -> Result<Cow<'_, str>, Error> {
 }
 
 fn hex<I>(mut chars: I, i: usize, len: usize) -> Result<char, Error>
-    where I: Iterator<Item = (usize, char)>
+where
+    I: Iterator<Item = (usize, char)>,
 {
     let mut buf = String::with_capacity(len);
     for _ in 0..len {

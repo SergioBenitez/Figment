@@ -2,23 +2,29 @@
 //! [`Figment`](crate::Figment).
 
 use std::ops::Deref;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize, de};
+use serde::{de, Deserialize, Serialize};
 
-use crate::{Error, value::{ConfiguredValueDe, Interpreter, MapDe, Tag}};
+use crate::{
+    value::{ConfiguredValueDe, Interpreter, MapDe, Tag},
+    Error,
+};
 
 /// Marker trait for "magic" values. Primarily for use with [`Either`].
 pub trait Magic: for<'de> Deserialize<'de> {
     /// The name of the deserialization pseudo-strucure.
-    #[doc(hidden)] const NAME: &'static str;
+    #[doc(hidden)]
+    const NAME: &'static str;
 
     /// The fields of the pseudo-structure. The last one should be the value.
-    #[doc(hidden)] const FIELDS: &'static [&'static str];
+    #[doc(hidden)]
+    const FIELDS: &'static [&'static str];
 
-    #[doc(hidden)] fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
+    #[doc(hidden)]
+    fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
         de: ConfiguredValueDe<'c, I>,
-        visitor: V
+        visitor: V,
     ) -> Result<V::Value, Error>;
 }
 
@@ -165,7 +171,10 @@ impl PartialEq for RelativePathBuf {
 
 impl<P: AsRef<Path>> From<P> for RelativePathBuf {
     fn from(path: P) -> RelativePathBuf {
-        Self { metadata_path: None, path: path.as_ref().into() }
+        Self {
+            metadata_path: None,
+            path: path.as_ref().into(),
+        }
     }
 }
 
@@ -174,12 +183,12 @@ impl Magic for RelativePathBuf {
 
     const FIELDS: &'static [&'static str] = &[
         "___figment_relative_metadata_path",
-        "___figment_relative_path"
+        "___figment_relative_path",
     ];
 
     fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
         de: ConfiguredValueDe<'c, I>,
-        visitor: V
+        visitor: V,
     ) -> Result<V::Value, Error> {
         // If we have this struct with a non-empty metadata_path, use it.
         let config = de.config;
@@ -192,10 +201,13 @@ impl Magic for RelativePathBuf {
             }
         }
 
-        let metadata_path = config.get_metadata(de.value.tag())
-            .and_then(|metadata| metadata.source.as_ref()
+        let metadata_path = config.get_metadata(de.value.tag()).and_then(|metadata| {
+            metadata
+                .source
+                .as_ref()
                 .and_then(|s| s.file_path())
-                .map(|path| path.display().to_string()));
+                .map(|path| path.display().to_string())
+        });
 
         let mut map = crate::value::Map::new();
         if let Some(path) = metadata_path {
@@ -205,7 +217,9 @@ impl Magic for RelativePathBuf {
         // If we have this struct with no metadata_path, still use the value.
         let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(de.value);
         map.insert(Self::FIELDS[1].into(), value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(config, v)))
+        visitor.visit_map(MapDe::new(&map, |v| {
+            ConfiguredValueDe::<I>::from(config, v)
+        }))
     }
 }
 
@@ -356,7 +370,8 @@ impl RelativePathBuf {
     /// }
     /// ```
     pub fn serialize_original<S>(&self, ser: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         self.original().serialize(ser)
     }
@@ -380,7 +395,8 @@ impl RelativePathBuf {
     /// ```
     // FIXME: Make this the default? We need a breaking change for this.
     pub fn serialize_relative<S>(&self, ser: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         self.relative().serialize(ser)
     }
@@ -489,10 +505,13 @@ pub enum Either<A, B> {
 }
 
 impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
-    where A: Magic, B: Deserialize<'b>
+where
+    A: Magic,
+    B: Deserialize<'b>,
 {
     fn deserialize<D>(de: D) -> Result<Self, D::Error>
-        where D: de::Deserializer<'de>
+    where
+        D: de::Deserializer<'de>,
     {
         use crate::value::ValueVisitor;
 
@@ -501,13 +520,14 @@ impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
         match A::deserialize(&value) {
             Ok(value) => Ok(Either::Left(value)),
             Err(a_err) => {
-                let value = value.as_dict()
+                let value = value
+                    .as_dict()
                     .and_then(|d| d.get(A::FIELDS[A::FIELDS.len() - 1]))
                     .unwrap_or(&value);
 
                 match B::deserialize(value) {
                     Ok(value) => Ok(Either::Right(value)),
-                    Err(b_err) => Err(de::Error::custom(format!("{}; {}", a_err, b_err)))
+                    Err(b_err) => Err(de::Error::custom(format!("{}; {}", a_err, b_err))),
                 }
             }
         }
@@ -569,14 +589,12 @@ impl<T: PartialEq> PartialEq for Tagged<T> {
 
 impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
     const NAME: &'static str = "___figment_tagged_item";
-    const FIELDS: &'static [&'static str] = &[
-        "___figment_tagged_tag" , "___figment_tagged_value"
-    ];
+    const FIELDS: &'static [&'static str] = &["___figment_tagged_tag", "___figment_tagged_value"];
 
     fn deserialize_from<'de: 'c, 'c, V: de::Visitor<'de>, I: Interpreter>(
         de: ConfiguredValueDe<'c, I>,
-        visitor: V
-    ) -> Result<V::Value, Error>{
+        visitor: V,
+    ) -> Result<V::Value, Error> {
         let config = de.config;
         let mut map = crate::value::Map::new();
 
@@ -595,7 +613,9 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(de.value);
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<I>::from(config, v)))
+        visitor.visit_map(MapDe::new(&map, |v| {
+            ConfiguredValueDe::<I>::from(config, v)
+        }))
     }
 }
 
@@ -648,7 +668,10 @@ impl<T> Deref for Tagged<T> {
 
 impl<T> From<T> for Tagged<T> {
     fn from(value: T) -> Self {
-        Tagged { tag: Tag::Default, value, }
+        Tagged {
+            tag: Tag::Default,
+            value,
+        }
     }
 }
 
@@ -669,34 +692,38 @@ mod _serde {
         pub use std::result::Result::{self, Err, Ok};
 
         pub fn missing_field<'de, V, E>(field: &'static str) -> Result<V, E>
-            where V: serde::de::Deserialize<'de>,
-                  E: serde::de::Error,
+        where
+            V: serde::de::Deserialize<'de>,
+            E: serde::de::Error,
         {
             struct MissingFieldDeserializer<E>(&'static str, PhantomData<E>);
 
             impl<'de, E> serde::de::Deserializer<'de> for MissingFieldDeserializer<E>
-                where E: serde::de::Error
+            where
+                E: serde::de::Error,
             {
-                    type Error = E;
+                type Error = E;
 
-                    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, E>
-                        where V: serde::de::Visitor<'de>,
-                    {
-                        Err(serde::de::Error::missing_field(self.0))
-                    }
-
-                    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, E>
-                        where V: serde::de::Visitor<'de>,
-                    {
-                        visitor.visit_none()
-                    }
-
-                    serde::forward_to_deserialize_any! {
-                        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
-                        string bytes byte_buf unit unit_struct newtype_struct seq tuple
-                        tuple_struct map struct enum identifier ignored_any
-                    }
+                fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, E>
+                where
+                    V: serde::de::Visitor<'de>,
+                {
+                    Err(serde::de::Error::missing_field(self.0))
                 }
+
+                fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, E>
+                where
+                    V: serde::de::Visitor<'de>,
+                {
+                    visitor.visit_none()
+                }
+
+                serde::forward_to_deserialize_any! {
+                    bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
+                    string bytes byte_buf unit unit_struct newtype_struct seq tuple
+                    tuple_struct map struct enum identifier ignored_any
+                }
+            }
 
             let deserializer = MissingFieldDeserializer(field, PhantomData);
             serde::de::Deserialize::deserialize(deserializer)
@@ -730,10 +757,7 @@ mod _serde {
                     ) -> export::fmt::Result {
                         export::Formatter::write_str(__formatter, "field identifier")
                     }
-                    fn visit_u64<__E>(
-                        self,
-                        __value: u64,
-                    ) -> export::Result<Self::Value, __E>
+                    fn visit_u64<__E>(self, __value: u64) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
@@ -746,51 +770,34 @@ mod _serde {
                             )),
                         }
                     }
-                    fn visit_str<__E>(
-                        self,
-                        __value: &str,
-                    ) -> export::Result<Self::Value, __E>
+                    fn visit_str<__E>(self, __value: &str) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
-                            "___figment_relative_metadata_path" => {
-                                export::Ok(__Field::__field0)
-                            }
+                            "___figment_relative_metadata_path" => export::Ok(__Field::__field0),
                             "___figment_relative_path" => export::Ok(__Field::__field1),
                             _ => export::Ok(__Field::__ignore),
                         }
                     }
-                    fn visit_bytes<__E>(
-                        self,
-                        __value: &[u8],
-                    ) -> export::Result<Self::Value, __E>
+                    fn visit_bytes<__E>(self, __value: &[u8]) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
                         match __value {
-                            b"___figment_relative_metadata_path" => {
-                                export::Ok(__Field::__field0)
-                            }
-                            b"___figment_relative_path" => {
-                                export::Ok(__Field::__field1)
-                            }
+                            b"___figment_relative_metadata_path" => export::Ok(__Field::__field0),
+                            b"___figment_relative_path" => export::Ok(__Field::__field1),
                             _ => export::Ok(__Field::__ignore),
                         }
                     }
                 }
                 impl<'de> _serde::Deserialize<'de> for __Field {
                     #[inline]
-                    fn deserialize<__D>(
-                        __deserializer: __D,
-                    ) -> export::Result<Self, __D::Error>
+                    fn deserialize<__D>(__deserializer: __D) -> export::Result<Self, __D::Error>
                     where
                         __D: _serde::Deserializer<'de>,
                     {
-                        _serde::Deserializer::deserialize_identifier(
-                            __deserializer,
-                            __FieldVisitor,
-                        )
+                        _serde::Deserializer::deserialize_identifier(__deserializer, __FieldVisitor)
                     }
                 }
                 struct __Visitor<'de> {
@@ -803,10 +810,7 @@ mod _serde {
                         &self,
                         __formatter: &mut export::Formatter,
                     ) -> export::fmt::Result {
-                        export::Formatter::write_str(
-                            __formatter,
-                            "struct RelativePathBuf",
-                        )
+                        export::Formatter::write_str(__formatter, "struct RelativePathBuf")
                     }
                     #[inline]
                     fn visit_seq<__A>(
@@ -862,10 +866,8 @@ mod _serde {
                     where
                         __A: _serde::de::MapAccess<'de>,
                     {
-                        let mut __field0: export::Option<Option<PathBuf>> =
-                            export::None;
-                        let mut __field1: export::Option<PathBuf> =
-                            export::None;
+                        let mut __field0: export::Option<Option<PathBuf>> = export::None;
+                        let mut __field1: export::Option<PathBuf> = export::None;
                         while let export::Some(__key) =
                             match _serde::de::MapAccess::next_key::<__Field>(&mut __map) {
                                 export::Ok(__val) => __val,
@@ -916,9 +918,8 @@ mod _serde {
                                 _ => {
                                     let _ = match _serde::de::MapAccess::next_value::<
                                         _serde::de::IgnoredAny,
-                                    >(
-                                        &mut __map
-                                    ) {
+                                    >(&mut __map)
+                                    {
                                         export::Ok(__val) => __val,
                                         export::Err(__err) => {
                                             return export::Err(__err);
@@ -929,20 +930,19 @@ mod _serde {
                         }
                         let __field0 = match __field0 {
                             export::Some(__field0) => __field0,
-                            export::None => match export::missing_field(
-                                "___figment_relative_metadata_path",
-                            ) {
-                                export::Ok(__val) => __val,
-                                export::Err(__err) => {
-                                    return export::Err(__err);
+                            export::None => {
+                                match export::missing_field("___figment_relative_metadata_path") {
+                                    export::Ok(__val) => __val,
+                                    export::Err(__err) => {
+                                        return export::Err(__err);
+                                    }
                                 }
-                            },
+                            }
                         };
                         let __field1 = match __field1 {
                             export::Some(__field1) => __field1,
-                            export::None => match export::missing_field(
-                                "___figment_relative_path",
-                            ) {
+                            export::None => match export::missing_field("___figment_relative_path")
+                            {
                                 export::Ok(__val) => __val,
                                 export::Err(__err) => {
                                     return export::Err(__err);
@@ -979,10 +979,7 @@ mod _serde {
         extern crate serde as _serde;
         #[automatically_derived]
         impl _serde::Serialize for RelativePathBuf {
-            fn serialize<__S>(
-                &self,
-                __serializer: __S,
-            ) -> export::Result<__S::Ok, __S::Error>
+            fn serialize<__S>(&self, __serializer: __S) -> export::Result<__S::Ok, __S::Error>
             where
                 __S: _serde::Serializer,
             {
@@ -1032,10 +1029,7 @@ mod _serde {
             A: _serde::Serialize,
             B: _serde::Serialize,
         {
-            fn serialize<__S>(
-                &self,
-                __serializer: __S,
-            ) -> export::Result<__S::Ok, __S::Error>
+            fn serialize<__S>(&self, __serializer: __S) -> export::Result<__S::Ok, __S::Error>
             where
                 __S: _serde::Serializer,
             {
@@ -1080,10 +1074,7 @@ mod _serde {
                     ) -> export::fmt::Result {
                         export::Formatter::write_str(__formatter, "field identifier")
                     }
-                    fn visit_u64<__E>(
-                        self,
-                        __value: u64,
-                    ) -> export::Result<Self::Value, __E>
+                    fn visit_u64<__E>(self, __value: u64) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
@@ -1096,10 +1087,7 @@ mod _serde {
                             )),
                         }
                     }
-                    fn visit_str<__E>(
-                        self,
-                        __value: &str,
-                    ) -> export::Result<Self::Value, __E>
+                    fn visit_str<__E>(self, __value: &str) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
@@ -1109,10 +1097,7 @@ mod _serde {
                             _ => export::Ok(__Field::__ignore),
                         }
                     }
-                    fn visit_bytes<__E>(
-                        self,
-                        __value: &[u8],
-                    ) -> export::Result<Self::Value, __E>
+                    fn visit_bytes<__E>(self, __value: &[u8]) -> export::Result<Self::Value, __E>
                     where
                         __E: _serde::de::Error,
                     {
@@ -1125,16 +1110,11 @@ mod _serde {
                 }
                 impl<'de> _serde::Deserialize<'de> for __Field {
                     #[inline]
-                    fn deserialize<__D>(
-                        __deserializer: __D,
-                    ) -> export::Result<Self, __D::Error>
+                    fn deserialize<__D>(__deserializer: __D) -> export::Result<Self, __D::Error>
                     where
                         __D: _serde::Deserializer<'de>,
                     {
-                        _serde::Deserializer::deserialize_identifier(
-                            __deserializer,
-                            __FieldVisitor,
-                        )
+                        _serde::Deserializer::deserialize_identifier(__deserializer, __FieldVisitor)
                     }
                 }
                 struct __Visitor<'de, T>
@@ -1163,22 +1143,21 @@ mod _serde {
                     where
                         __A: _serde::de::SeqAccess<'de>,
                     {
-                        let __field0 = match match _serde::de::SeqAccess::next_element::<Tag>(
-                            &mut __seq,
-                        ) {
-                            export::Ok(__val) => __val,
-                            export::Err(__err) => {
-                                return export::Err(__err);
-                            }
-                        } {
-                            export::Some(__value) => __value,
-                            export::None => {
-                                return export::Err(_serde::de::Error::invalid_length(
-                                    0usize,
-                                    &"struct Tagged with 2 elements",
-                                ));
-                            }
-                        };
+                        let __field0 =
+                            match match _serde::de::SeqAccess::next_element::<Tag>(&mut __seq) {
+                                export::Ok(__val) => __val,
+                                export::Err(__err) => {
+                                    return export::Err(__err);
+                                }
+                            } {
+                                export::Some(__value) => __value,
+                                export::None => {
+                                    return export::Err(_serde::de::Error::invalid_length(
+                                        0usize,
+                                        &"struct Tagged with 2 elements",
+                                    ));
+                                }
+                            };
                         let __field1 =
                             match match _serde::de::SeqAccess::next_element::<T>(&mut __seq) {
                                 export::Ok(__val) => __val,
@@ -1188,12 +1167,10 @@ mod _serde {
                             } {
                                 export::Some(__value) => __value,
                                 export::None => {
-                                    return export::Err(
-                                        _serde::de::Error::invalid_length(
-                                            1usize,
-                                            &"struct Tagged with 2 elements",
-                                        ),
-                                    );
+                                    return export::Err(_serde::de::Error::invalid_length(
+                                        1usize,
+                                        &"struct Tagged with 2 elements",
+                                    ));
                                 }
                             };
                         export::Ok(Tagged {
@@ -1229,9 +1206,7 @@ mod _serde {
                                         );
                                     }
                                     __field0 = export::Some(
-                                        match _serde::de::MapAccess::next_value::<Tag>(
-                                            &mut __map,
-                                        ) {
+                                        match _serde::de::MapAccess::next_value::<Tag>(&mut __map) {
                                             export::Ok(__val) => __val,
                                             export::Err(__err) => {
                                                 return export::Err(__err);
@@ -1248,8 +1223,7 @@ mod _serde {
                                         );
                                     }
                                     __field1 = export::Some(
-                                        match _serde::de::MapAccess::next_value::<T>(&mut __map)
-                                        {
+                                        match _serde::de::MapAccess::next_value::<T>(&mut __map) {
                                             export::Ok(__val) => __val,
                                             export::Err(__err) => {
                                                 return export::Err(__err);
@@ -1260,9 +1234,8 @@ mod _serde {
                                 _ => {
                                     let _ = match _serde::de::MapAccess::next_value::<
                                         _serde::de::IgnoredAny,
-                                    >(
-                                        &mut __map
-                                    ) {
+                                    >(&mut __map)
+                                    {
                                         export::Ok(__val) => __val,
                                         export::Err(__err) => {
                                             return export::Err(__err);
@@ -1273,9 +1246,7 @@ mod _serde {
                         }
                         let __field0 = match __field0 {
                             export::Some(__field0) => __field0,
-                            export::None => match export::missing_field(
-                                "___figment_tagged_tag",
-                            ) {
+                            export::None => match export::missing_field("___figment_tagged_tag") {
                                 export::Ok(__val) => __val,
                                 export::Err(__err) => {
                                     return export::Err(__err);
@@ -1284,14 +1255,14 @@ mod _serde {
                         };
                         let __field1 = match __field1 {
                             export::Some(__field1) => __field1,
-                            export::None => match export::missing_field(
-                                "___figment_tagged_value",
-                            ) {
-                                export::Ok(__val) => __val,
-                                export::Err(__err) => {
-                                    return export::Err(__err);
+                            export::None => {
+                                match export::missing_field("___figment_tagged_value") {
+                                    export::Ok(__val) => __val,
+                                    export::Err(__err) => {
+                                        return export::Err(__err);
+                                    }
                                 }
-                            },
+                            }
                         };
                         export::Ok(Tagged {
                             tag: __field0,
@@ -1299,8 +1270,7 @@ mod _serde {
                         })
                     }
                 }
-                const FIELDS: &[&str] =
-                    &["___figment_tagged_tag", "___figment_tagged_value"];
+                const FIELDS: &[&str] = &["___figment_tagged_tag", "___figment_tagged_value"];
                 _serde::Deserializer::deserialize_struct(
                     __deserializer,
                     "___figment_tagged_item",
@@ -1324,10 +1294,7 @@ mod _serde {
         where
             T: _serde::Serialize,
         {
-            fn serialize<__S>(
-                &self,
-                __serializer: __S,
-            ) -> export::Result<__S::Ok, __S::Error>
+            fn serialize<__S>(&self, __serializer: __S) -> export::Result<__S::Ok, __S::Error>
             where
                 __S: _serde::Serializer,
             {
@@ -1379,12 +1346,15 @@ mod tests {
 
         crate::Jail::expect_with(|jail| {
             jail.set_env("foo", "bar");
-            jail.create_file("Config.toml", r###"
+            jail.create_file(
+                "Config.toml",
+                r###"
                 [debug]
                 file_path = "hello.js"
                 another = "whoops/hi/there"
                 absolute = "/tmp/foo"
-            "###)?;
+            "###,
+            )?;
 
             let path: RelativePathBuf = Figment::new()
                 .merge(Toml::file("Config.toml").nested())
@@ -1392,7 +1362,10 @@ mod tests {
                 .extract_inner("file_path")?;
 
             assert_eq!(path.original(), Path::new("hello.js"));
-            assert_eq!(path.metadata_path().unwrap(), jail.directory().join("Config.toml"));
+            assert_eq!(
+                path.metadata_path().unwrap(),
+                jail.directory().join("Config.toml")
+            );
             assert_eq!(path.relative(), jail.directory().join("hello.js"));
 
             let path: RelativePathBuf = Figment::new()
@@ -1401,7 +1374,10 @@ mod tests {
                 .extract_inner("another")?;
 
             assert_eq!(path.original(), Path::new("whoops/hi/there"));
-            assert_eq!(path.metadata_path().unwrap(), jail.directory().join("Config.toml"));
+            assert_eq!(
+                path.metadata_path().unwrap(),
+                jail.directory().join("Config.toml")
+            );
             assert_eq!(path.relative(), jail.directory().join("whoops/hi/there"));
 
             let path: RelativePathBuf = Figment::new()
@@ -1410,22 +1386,34 @@ mod tests {
                 .extract_inner("absolute")?;
 
             assert_eq!(path.original(), Path::new("/tmp/foo"));
-            assert_eq!(path.metadata_path().unwrap(), jail.directory().join("Config.toml"));
+            assert_eq!(
+                path.metadata_path().unwrap(),
+                jail.directory().join("Config.toml")
+            );
             assert_eq!(path.relative(), Path::new("/tmp/foo"));
 
-            jail.create_file("Config.toml", r###"
+            jail.create_file(
+                "Config.toml",
+                r###"
                 [debug.inner.container]
                 inside = "inside_path/a.html"
-            "###)?;
+            "###,
+            )?;
 
             #[derive(serde::Deserialize)]
-            struct Testing { inner: Container, }
+            struct Testing {
+                inner: Container,
+            }
 
             #[derive(serde::Deserialize)]
-            struct Container { container: Inside, }
+            struct Container {
+                container: Inside,
+            }
 
             #[derive(serde::Deserialize)]
-            struct Inside { inside: RelativePathBuf, }
+            struct Inside {
+                inside: RelativePathBuf,
+            }
 
             let testing: Testing = Figment::new()
                 .merge(Toml::file("Config.toml").nested())
@@ -1434,7 +1422,10 @@ mod tests {
 
             let path = testing.inner.container.inside;
             assert_eq!(path.original(), Path::new("inside_path/a.html"));
-            assert_eq!(path.metadata_path().unwrap(), jail.directory().join("Config.toml"));
+            assert_eq!(
+                path.metadata_path().unwrap(),
+                jail.directory().join("Config.toml")
+            );
             assert_eq!(path.relative(), jail.directory().join("inside_path/a.html"));
 
             Ok(())

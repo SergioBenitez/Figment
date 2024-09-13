@@ -1,12 +1,12 @@
-use std::fs::{File, self};
-use std::io::{Write, BufWriter};
-use std::path::{Path, PathBuf};
-use std::fmt::Display;
-use std::ffi::{OsStr, OsString};
 use std::collections::HashMap;
+use std::ffi::{OsStr, OsString};
+use std::fmt::Display;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 
-use tempfile::TempDir;
 use parking_lot::Mutex;
+use tempfile::TempDir;
 
 use crate::error::Result;
 
@@ -63,7 +63,9 @@ pub struct Jail {
 }
 
 /// Convert a `T: Display` to a `String`.
-fn as_string<S: Display>(s: S) -> String { s.to_string() }
+fn as_string<S: Display>(s: S) -> String {
+    s.to_string()
+}
 
 /// Remove any dots from the path by popping as needed.
 fn dedot(path: &Path) -> PathBuf {
@@ -72,13 +74,15 @@ fn dedot(path: &Path) -> PathBuf {
     let mut comps = vec![];
     for component in path.components() {
         match component {
-            p@Prefix(_) => comps = vec![p],
-            r@RootDir if comps.iter().all(|c| matches!(c, Prefix(_))) => comps.push(r),
-            r@RootDir => comps = vec![r],
-            CurDir => { },
-            ParentDir if comps.iter().all(|c| matches!(c, Prefix(_) | RootDir)) => { },
-            ParentDir => { comps.pop(); },
-            c@Normal(_) => comps.push(c),
+            p @ Prefix(_) => comps = vec![p],
+            r @ RootDir if comps.iter().all(|c| matches!(c, Prefix(_))) => comps.push(r),
+            r @ RootDir => comps = vec![r],
+            CurDir => {}
+            ParentDir if comps.iter().all(|c| matches!(c, Prefix(_) | RootDir)) => {}
+            ParentDir => {
+                comps.pop();
+            }
+            c @ Normal(_) => comps.push(c),
         }
     }
 
@@ -165,7 +169,9 @@ impl Jail {
         }
 
         if !path.is_relative() {
-            return Err("Jail: input path is outside of jail directory".to_string().into());
+            return Err("Jail: input path is outside of jail directory"
+                .to_string()
+                .into());
         }
 
         Ok(path)
@@ -345,7 +351,8 @@ impl Jail {
     pub fn set_env<K: AsRef<str>, V: Display>(&mut self, k: K, v: V) {
         let key = k.as_ref();
         if !self.saved_env_vars.contains_key(OsStr::new(key)) {
-            self.saved_env_vars.insert(key.into(), std::env::var_os(key));
+            self.saved_env_vars
+                .insert(key.into(), std::env::var_os(key));
         }
 
         std::env::set_var(key, v.to_string());
@@ -357,7 +364,7 @@ impl Drop for Jail {
         for (key, value) in &self.saved_env_vars {
             match value {
                 Some(val) => std::env::set_var(key, val),
-                None => std::env::remove_var(key)
+                None => std::env::remove_var(key),
             }
         }
 

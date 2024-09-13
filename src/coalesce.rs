@@ -1,5 +1,5 @@
+use crate::value::{Map, Value};
 use crate::Profile;
-use crate::value::{Value, Map};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Order {
@@ -11,7 +11,9 @@ pub enum Order {
 
 pub trait Coalescible: Sized {
     fn coalesce(self, other: Self, order: Order) -> Self;
-    fn merge(self, other: Self) -> Self { self.coalesce(other, Order::Merge) }
+    fn merge(self, other: Self) -> Self {
+        self.coalesce(other, Order::Merge)
+    }
 }
 
 impl Coalescible for Profile {
@@ -25,10 +27,15 @@ impl Coalescible for Profile {
 
 impl Coalescible for Value {
     fn coalesce(self, other: Self, o: Order) -> Self {
-        use {Value::Dict as D, Value::Array as A, Order::*};
+        use {Order::*, Value::Array as A, Value::Dict as D};
         match (self, other, o) {
-            (D(t, a), D(_, b), Join | Adjoin) | (D(_, a), D(t, b), Merge | Admerge) => D(t, a.coalesce(b, o)),
-            (A(t, mut a), A(_, b), Adjoin | Admerge) => A(t, { a.extend(b); a }),
+            (D(t, a), D(_, b), Join | Adjoin) | (D(_, a), D(t, b), Merge | Admerge) => {
+                D(t, a.coalesce(b, o))
+            }
+            (A(t, mut a), A(_, b), Adjoin | Admerge) => A(t, {
+                a.extend(b);
+                a
+            }),
             (v, _, Join | Adjoin) | (_, v, Merge | Admerge) => v,
         }
     }

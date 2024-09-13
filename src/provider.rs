@@ -1,5 +1,5 @@
-use crate::{Profile, Error, Metadata};
-use crate::value::{Tag, Map, Dict};
+use crate::value::{Dict, Map, Tag};
+use crate::{Error, Metadata, Profile};
 
 /// Trait implemented by configuration source providers.
 ///
@@ -98,14 +98,20 @@ pub trait Provider {
     /// This is used internally! Please, please don't use this externally. If
     /// you have a good usecase for this, let me know!
     #[doc(hidden)]
-    fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> { None }
+    fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> {
+        None
+    }
 }
 
 /// This is exactly `<T as Provider>`.
 impl<T: Provider> Provider for &T {
-    fn metadata(&self) -> Metadata { T::metadata(self) }
+    fn metadata(&self) -> Metadata {
+        T::metadata(self)
+    }
 
-    fn data(&self) -> Result<Map<Profile, Dict>, Error> { T::data(self) }
+    fn data(&self) -> Result<Map<Profile, Dict>, Error> {
+        T::data(self)
+    }
 
     fn profile(&self) -> Option<Profile> {
         T::profile(self)

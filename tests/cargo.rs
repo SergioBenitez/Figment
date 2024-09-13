@@ -1,5 +1,8 @@
+use figment::{
+    providers::{Env, Format, Json, Toml},
+    Figment,
+};
 use serde::Deserialize;
-use figment::{Figment, providers::{Format, Toml, Json, Env}};
 
 #[test]
 fn mini_cargo() {
@@ -21,12 +24,15 @@ fn mini_cargo() {
     // Replicate part of Cargo's config but also support `Cargo.json` with lower
     // precedence than `Cargo.toml`.
     figment::Jail::expect_with(|jail| {
-        jail.create_file("Cargo.toml", r#"
+        jail.create_file(
+            "Cargo.toml",
+            r#"
             [package]
             name = "test"
             authors = ["bob"]
             publish = false
-        "#)?;
+        "#,
+        )?;
 
         let config: Config = Figment::new()
             .merge(Toml::file("Cargo.toml"))
@@ -35,16 +41,19 @@ fn mini_cargo() {
             .join(Json::file("Cargo.json"))
             .extract()?;
 
-        assert_eq!(config, Config {
-            package: Package {
-                name: "test".into(),
-                description: None,
-                authors: vec!["bob".into()],
-                publish: Some(false)
-            },
-            rustc: None,
-            rustdoc: None
-        });
+        assert_eq!(
+            config,
+            Config {
+                package: Package {
+                    name: "test".into(),
+                    description: None,
+                    authors: vec!["bob".into()],
+                    publish: Some(false)
+                },
+                rustc: None,
+                rustdoc: None
+            }
+        );
 
         Ok(())
     });

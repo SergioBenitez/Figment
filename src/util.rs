@@ -26,9 +26,9 @@
 //!
 //! ```
 use std::fmt;
-use std::path::{Path, PathBuf, Component};
+use std::path::{Component, Path, PathBuf};
 
-use serde::de::{self, Unexpected, Deserializer};
+use serde::de::{self, Deserializer, Unexpected};
 
 /// A helper function to determine the relative path to `path` from `base`.
 ///
@@ -64,7 +64,9 @@ use serde::de::{self, Unexpected, Deserializer};
 // Copyright 2017 The Rust Project Developers.
 // Adapted from `pathdiff`, which itself adapted from rustc's path_relative_from.
 pub fn diff_paths<P, B>(path: P, base: B) -> Option<PathBuf>
-     where P: AsRef<Path>, B: AsRef<Path>
+where
+    P: AsRef<Path>,
+    B: AsRef<Path>,
 {
     let (path, base) = (path.as_ref(), base.as_ref());
     if path.has_root() != base.has_root() {
@@ -147,21 +149,21 @@ pub fn bool_from_str_or_int<'de, D: Deserializer<'de>>(de: D) -> Result<bool, D:
             match val {
                 v if uncased::eq(v, "true") => Ok(true),
                 v if uncased::eq(v, "false") => Ok(false),
-                s => Err(E::invalid_value(Unexpected::Str(s), &"true or false"))
+                s => Err(E::invalid_value(Unexpected::Str(s), &"true or false")),
             }
         }
 
         fn visit_u64<E: de::Error>(self, n: u64) -> Result<bool, E> {
             match n {
                 0 | 1 => Ok(n != 0),
-                n => Err(E::invalid_value(Unexpected::Unsigned(n), &"0 or 1"))
+                n => Err(E::invalid_value(Unexpected::Unsigned(n), &"0 or 1")),
             }
         }
 
         fn visit_i64<E: de::Error>(self, n: i64) -> Result<bool, E> {
             match n {
                 0 | 1 => Ok(n != 0),
-                n => Err(E::invalid_value(Unexpected::Signed(n), &"0 or 1"))
+                n => Err(E::invalid_value(Unexpected::Signed(n), &"0 or 1")),
             }
         }
 
@@ -198,24 +200,32 @@ pub fn bool_from_str_or_int<'de, D: Deserializer<'de>>(de: D) -> Result<bool, D:
 /// assert_eq!(pairs[2], ("value".into(), 100));
 /// ```
 pub mod vec_tuple_map {
+    use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
     use std::fmt;
-    use serde::{de, Deserialize, Serialize, Deserializer, Serializer};
 
     /// The serializer half.
     pub fn serialize<S, K, V>(vec: &[(K, V)], se: S) -> Result<S::Ok, S::Error>
-        where S: Serializer, K: Serialize, V: Serialize
+    where
+        S: Serializer,
+        K: Serialize,
+        V: Serialize,
     {
         se.collect_map(vec.iter().map(|(ref k, ref v)| (k, v)))
     }
 
     /// The deserializer half.
     pub fn deserialize<'de, K, V, D>(de: D) -> Result<Vec<(K, V)>, D::Error>
-        where D: Deserializer<'de>, K: Deserialize<'de>, V: Deserialize<'de>
+    where
+        D: Deserializer<'de>,
+        K: Deserialize<'de>,
+        V: Deserialize<'de>,
     {
         struct Visitor<K, V>(std::marker::PhantomData<Vec<(K, V)>>);
 
         impl<'de, K, V> de::Visitor<'de> for Visitor<K, V>
-            where K: Deserialize<'de>, V: Deserialize<'de>,
+        where
+            K: Deserialize<'de>,
+            V: Deserialize<'de>,
         {
             type Value = Vec<(K, V)>;
 
@@ -224,7 +234,8 @@ pub mod vec_tuple_map {
             }
 
             fn visit_map<A>(self, mut map: A) -> Result<Vec<(K, V)>, A::Error>
-                where A: de::MapAccess<'de>
+            where
+                A: de::MapAccess<'de>,
             {
                 let mut vec = Vec::with_capacity(map.size_hint().unwrap_or(0));
                 while let Some((k, v)) = map.next_entry()? {
@@ -239,7 +250,7 @@ pub mod vec_tuple_map {
     }
 }
 
-use crate::value::{Value, Dict};
+use crate::value::{Dict, Value};
 
 /// Given a key path `key` of the form `a.b.c`, creates nested dictionaries for
 /// for every path component delimited by `.` in the path string (3 in `a.b.c`),
@@ -276,7 +287,7 @@ pub fn nest(key: &str, value: Value) -> Value {
                 dict.insert(k.into(), value_from(keys, value));
                 dict.into()
             }
-            Some(_) | None => value
+            Some(_) | None => value,
         }
     }
 
@@ -321,7 +332,7 @@ macro_rules! make_cloneable {
                 Box::new(self.clone())
             }
         }
-    }
+    };
 }
 
 #[doc(hidden)]

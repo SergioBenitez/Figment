@@ -1,10 +1,10 @@
 use std::fmt;
 
-use crate::{Profile, Provider, Metadata};
 use crate::coalesce::Coalescible;
-use crate::value::{Map, Dict};
 use crate::error::Error;
 use crate::util::nest;
+use crate::value::{Dict, Map};
+use crate::{Metadata, Profile, Provider};
 
 use uncased::{Uncased, UncasedStr};
 
@@ -129,7 +129,8 @@ impl Env {
     }
 
     fn chain<F: Clone + 'static>(self, f: F) -> Self
-        where F: for<'a> Fn(Option<Uncased<'a>>) -> Option<Uncased<'a>>
+    where
+        F: for<'a> Fn(Option<Uncased<'a>>) -> Option<Uncased<'a>>,
     {
         let filter_map = self.filter_map;
         Env {
@@ -196,11 +197,10 @@ impl Env {
     /// ```
     pub fn prefixed(prefix: &str) -> Self {
         let owned_prefix = prefix.to_string();
-        let mut env = Env::new()
-            .filter_map(move |key| match key.starts_with(&owned_prefix) {
-                true => Some(key[owned_prefix.len()..].into()),
-                false => None
-            });
+        let mut env = Env::new().filter_map(move |key| match key.starts_with(&owned_prefix) {
+            true => Some(key[owned_prefix.len()..].into()),
+            false => None,
+        });
 
         env.prefix = Some(prefix.into());
         env
@@ -229,7 +229,8 @@ impl Env {
     /// });
     /// ```
     pub fn filter<F: Clone + 'static>(self, filter: F) -> Self
-        where F: Fn(&UncasedStr) -> bool
+    where
+        F: Fn(&UncasedStr) -> bool,
     {
         self.chain(move |prev| prev.filter(|v| filter(v)))
     }
@@ -286,7 +287,8 @@ impl Env {
     /// });
     /// ```
     pub fn map<F: Clone + 'static>(self, mapper: F) -> Self
-        where F: Fn(&UncasedStr) -> Uncased<'_>
+    where
+        F: Fn(&UncasedStr) -> Uncased<'_>,
     {
         self.chain(move |prev| prev.map(|v| mapper(&v).into_owned()))
     }
@@ -331,7 +333,8 @@ impl Env {
     /// });
     /// ```
     pub fn filter_map<F: Clone + 'static>(self, f: F) -> Self
-        where F: Fn(&UncasedStr) -> Option<Uncased<'_>>
+    where
+        F: Fn(&UncasedStr) -> Option<Uncased<'_>>,
     {
         self.chain(move |prev| prev.and_then(|v| f(&v).map(|v| v.into_owned())))
     }
@@ -520,14 +523,16 @@ impl Env {
     ///     Ok(())
     /// });
     /// ```
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uncased<'static>, String)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Uncased<'static>, String)> + 'a {
         std::env::vars_os()
             .filter(|(k, _)| !k.is_empty())
             .filter_map(move |(k, v)| {
                 let key = k.to_string_lossy();
                 let key = (self.filter_map)(UncasedStr::new(key.trim()))?;
                 let key = key.as_str().trim();
-                if key.split('.').any(|s| s.is_empty()) { return None }
+                if key.split('.').any(|s| s.is_empty()) {
+                    return None;
+                }
 
                 let key = match self.lowercase {
                     true => key.to_ascii_lowercase(),
@@ -614,14 +619,13 @@ impl Env {
 
 impl Provider for Env {
     fn metadata(&self) -> Metadata {
-        let mut md = Metadata::named("environment variable(s)")
-            .interpolater(move |_: &Profile, k: &[&str]| {
-                let keys: Vec<_> = k.iter()
-                    .map(|k| k.to_ascii_uppercase())
-                    .collect();
+        let mut md = Metadata::named("environment variable(s)").interpolater(
+            move |_: &Profile, k: &[&str]| {
+                let keys: Vec<_> = k.iter().map(|k| k.to_ascii_uppercase()).collect();
 
                 keys.join(".")
-            });
+            },
+        );
 
         if let Some(prefix) = &self.prefix {
             md.name = format!("`{}` {}", prefix.to_ascii_uppercase(), md.name).into();
