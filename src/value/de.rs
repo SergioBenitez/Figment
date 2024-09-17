@@ -76,15 +76,14 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
     fn deserialize_any<V>(self, v: V) -> Result<V::Value>
         where V: de::Visitor<'de>
     {
-        let maker = |v| Self::from(self.config, v);
         let result = match *self.value {
             Value::String(_, ref s) => v.visit_str(s),
             Value::Char(_, c) => v.visit_char(c),
             Value::Bool(_, b) => v.visit_bool(b),
             Value::Num(_, n) => n.deserialize_any(v),
             Value::Empty(_, e) => e.deserialize_any(v),
-            Value::Dict(_, ref map) => v.visit_map(MapDe::new(map, maker)),
-            Value::Array(_, ref seq) => v.visit_seq(SeqDe::new(seq, maker)),
+            Value::Dict(_, ref map) => v.visit_map(MapDe::<Self>::new(map, self.config)),
+            Value::Array(_, ref seq) => v.visit_seq(SeqDe::<Self>::new(seq, self.config)),
         };
 
         result.map_err(|e| e.retagged(self.value.tag()).resolved(self.config))
@@ -134,8 +133,7 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
         let result = match self.value {
             Value::String(_, s) => v.visit_enum((&**s).into_deserializer()),
             Value::Dict(_, ref map) => {
-                let maker = |v| Self::from(self.config, v);
-                let map_access = MapDe::new(map, maker);
+                let map_access = MapDe::<Self>::new(map, self.config);
                 v.visit_enum(MapAccessDeserializer::new(map_access))
             }
             Value::Num(_, n) if n.to_u32().is_some() => {
@@ -182,20 +180,42 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
 
 use std::collections::btree_map::Iter;
 
-pub struct MapDe<'m, D, F: Fn(&'m Value) -> D> {
-    iter: Iter<'m, String, Value>,
-    pair: Option<(&'m String, &'m Value)>,
-    make_deserializer: F,
+pub trait MakeDeserializer<'v> {
+    type Args: Copy;
+
+    fn make_deserializer(value: &'v Value, args: Self::Args) -> Self;
 }
 
-impl<'m, D, F: Fn(&'m Value) -> D> MapDe<'m, D, F> {
-    pub fn new(map: &'m Dict, maker: F) -> Self {
-        MapDe { iter: map.iter(), pair: None, make_deserializer: maker }
+impl<'v, I: Interpreter> MakeDeserializer<'v> for ConfiguredValueDe<'v, I> {
+    type Args = &'v Figment;
+
+    fn make_deserializer(value: &'v Value, config: &'v Figment) -> Self {
+        Self::from(config, value)
     }
 }
 
-impl<'m, 'de, D, F> de::MapAccess<'de> for MapDe<'m, D, F>
-    where D: Deserializer<'de, Error = Error>, F: Fn(&'m Value) -> D,
+impl<'v> MakeDeserializer<'v> for &'v Value {
+    type Args = ();
+
+    fn make_deserializer(value: &'v Value, (): ()) -> Self {
+        value
+    }
+}
+
+pub struct MapDe<'v, 'f, D: MakeDeserializer<'f>> {
+    iter: Iter<'v, String, Value>,
+    pair: Option<(&'v String, &'v Value)>,
+    args: D::Args,
+}
+
+impl<'v, 'f, D: MakeDeserializer<'f>> MapDe<'v, 'f, D> {
+    pub fn new(map: &'v Dict, args: D::Args) -> Self {
+        MapDe { iter: map.iter(), pair: None, args }
+    }
+}
+
+impl<'v: 'f, 'f, 'de, D> de::MapAccess<'de> for MapDe<'v, 'f, D>
+    where D: MakeDeserializer<'f> + Deserializer<'de, Error = Error>,
 {
     type Error = Error;
 
@@ -219,35 +239,35 @@ impl<'m, 'de, D, F> de::MapAccess<'de> for MapDe<'m, D, F>
     {
         let (key, value) = self.pair.take().expect("visit_value called before visit_key");
         let tag = value.tag();
-        seed.deserialize((self.make_deserializer)(value))
+        seed.deserialize(D::make_deserializer(value, self.args))
             .map_err(|e: Error| e.prefixed(key).retagged(tag))
     }
 }
 
-pub struct SeqDe<'v, D, F: Fn(&'v Value) -> D> {
+pub struct SeqDe<'v, 'f, D: MakeDeserializer<'f>> {
     iter: std::iter::Enumerate<std::slice::Iter<'v, Value>>,
     len: usize,
-    make_deserializer: F,
+    args: D::Args,
 }
 
-impl<'v, D, F: Fn(&'v Value) -> D> SeqDe<'v, D, F> {
-    pub fn new(seq: &'v [Value], maker: F) -> Self {
-        SeqDe { len: seq.len(), iter: seq.iter().enumerate(), make_deserializer: maker }
+impl<'v, 'f, D: MakeDeserializer<'f>> SeqDe<'v, 'f, D> {
+    pub fn new(seq: &'v [Value], args: D::Args) -> Self {
+        SeqDe { len: seq.len(), iter: seq.iter().enumerate(), args }
     }
 }
 
-impl<'v, 'de, D, F> de::SeqAccess<'de> for SeqDe<'v, D, F>
-    where D: Deserializer<'de, Error = Error>, F: Fn(&'v Value) -> D,
+impl<'v: 'f, 'f, 'de, D> de::SeqAccess<'de> for SeqDe<'v, 'f, D>
+    where D: MakeDeserializer<'f> + Deserializer<'de, Error = Error>,
 {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
         where T: de::DeserializeSeed<'de>
     {
-        if let Some((i, item)) = self.iter.next() {
+        if let Some((i, value)) = self.iter.next() {
             // item.map_tag(|metadata| metadata.path.push(self.count.to_string()));
             self.len -= 1;
-            seed.deserialize((self.make_deserializer)(item))
+            seed.deserialize(D::make_deserializer(value, self.args))
                 .map_err(|e: Error| e.prefixed(&i.to_string()))
                 .map(Some)
         } else {
@@ -273,8 +293,8 @@ impl<'de> Deserializer<'de> for &Value {
             Bool(_, b) => v.visit_bool(b),
             Num(_, n) => n.deserialize_any(v),
             Empty(_, e) => e.deserialize_any(v),
-            Dict(_, ref map) => v.visit_map(MapDe::new(map, |v| v)),
-            Array(_, ref seq) => v.visit_seq(SeqDe::new(seq, |v| v)),
+            Dict(_, ref map) => v.visit_map(MapDe::<&Value>::new(map, ())),
+            Array(_, ref seq) => v.visit_seq(SeqDe::<&Value>::new(seq, ())),
         };
 
         result.map_err(|e: Error| e.retagged(self.tag()))
@@ -301,7 +321,7 @@ impl<'de> Deserializer<'de> for &Value {
         let result = match self {
             Value::String(_, s) => v.visit_enum((&**s).into_deserializer()),
             Value::Dict(_, ref map) => {
-                let map_access = MapDe::new(map, |v| v);
+                let map_access = MapDe::<&Value>::new(map, ());
                 v.visit_enum(MapAccessDeserializer::new(map_access))
             }
             Value::Num(_, n) if n.to_u32().is_some() => {
@@ -414,7 +434,7 @@ impl Value {
         let mut map = Dict::new();
         map.insert(Self::FIELDS[0].into(), de.value.tag().into());
         map.insert(Self::FIELDS[1].into(), de.value.clone());
-        visitor.visit_map(MapDe::new(&map, |v| ConfiguredValueDe::<'_, I>::from(de.config, v)))
+        visitor.visit_map(MapDe::<ConfiguredValueDe<I>>::new(&map, de.config))
     }
 }
 
