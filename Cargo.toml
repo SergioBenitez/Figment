@@ -19,7 +19,7 @@ default = ["env"]
 json = ["serde_json"]
 test = ["tempfile", "parking_lot"]
 toml = ["toml_edit"]
-yaml = ["serde_yaml"]
+yaml = ["serde_yml"]
 env = [] # does nothing; here for backwards compat
 
 [dependencies]
@@ -27,7 +27,7 @@ serde = "1.0"
 uncased = "0.9.3"
 toml_edit = { version = "0.22", optional = true, default-features = false, features = ["parse", "serde"] }
 serde_json = { version = "1.0", optional = true }
-serde_yaml = { version = "0.9", optional = true }
+serde_yml = { version = "0.0.12", optional = true }
 tempfile = { version = "3", optional = true }
 parking_lot = { version = "0.12", optional = true }
 
