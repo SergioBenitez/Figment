@@ -531,7 +531,7 @@ impl YamlExtended {
     /// This "YAML Extended" format parser implements the draft ["Merge Key
     /// Language-Independent Type for YAML™ Version
     /// 1.1"](https://yaml.org/type/merge.html) spec via
-    /// [`serde_yaml::Value::apply_merge()`]. This method is _not_ intended to
+    /// [`serde_yml::Value::apply_merge()`]. This method is _not_ intended to
     /// be used directly but rather indirectly by making use of `YamlExtended`
     /// as a provider. The extension is not part of any officially supported
     /// YAML release and is deprecated entirely since YAML 1.2. Using
@@ -603,14 +603,14 @@ impl YamlExtended {
     ///     Ok(())
     /// });
     /// ```
-    pub fn from_str<'de, T: DeserializeOwned>(s: &'de str) -> serde_yaml::Result<T> {
-        let mut value: serde_yaml::Value = serde_yaml::from_str(s)?;
+    pub fn from_str<'de, T: DeserializeOwned>(s: &'de str) -> serde_yml::Result<T> {
+        let mut value: serde_yml::Value = serde_yml::from_str(s)?;
         value.apply_merge()?;
         T::deserialize(value)
     }
 }
 
 impl_format!(Toml "TOML"/"toml": toml_edit::de::from_str, toml_edit::de::Error);
-impl_format!(Yaml "YAML"/"yaml": serde_yaml::from_str, serde_yaml::Error);
+impl_format!(Yaml "YAML"/"yaml": serde_yml::from_str, serde_yml::Error);
 impl_format!(Json "JSON"/"json": serde_json::from_str, serde_json::error::Error);
-impl_format!(YamlExtended "YAML Extended"/"yaml": YamlExtended::from_str, serde_yaml::Error);
+impl_format!(YamlExtended "YAML Extended"/"yaml": YamlExtended::from_str, serde_yml::Error);
