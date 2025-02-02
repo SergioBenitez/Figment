@@ -1,4 +1,4 @@
-//! (De)serializable values that "magically" use information from the extracing
+//! (De)serializable values that "magically" use information from the extracting
 //! [`Figment`](crate::Figment).
 
 use std::ops::Deref;
