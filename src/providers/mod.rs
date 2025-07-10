@@ -6,7 +6,9 @@
 mod serialized;
 mod data;
 mod env;
+mod named;
 
 pub use self::env::Env;
 pub use self::serialized::Serialized;
 pub use self::data::*;
+pub use self::named::Named;
