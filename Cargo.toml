@@ -39,9 +39,14 @@ tempfile = "3"
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
+serde_default_utils = { version = "0.3", features = ["inline"] }
 
 [build-dependencies]
 version_check = "0.9"
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[example]]
+name = "cli_app"
+required-features = ["toml"]
