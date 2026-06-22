@@ -101,6 +101,15 @@ pub struct Figment {
     pub(crate) profile: Profile,
     pub(crate) metadata: Map<Tag, Metadata>,
     pub(crate) value: Result<Map<Profile, Dict>>,
+    /// Each successfully-provided provider's tagged data, in merge order
+    /// (lowest → highest priority), retained *before* coalescing so that
+    /// overridden and array-replaced contributions remain recoverable.
+    ///
+    /// The coalesced [`value`](Self::value) keeps only the winning value per
+    /// leaf (with a single [`Tag`]); this parallel record preserves every
+    /// contribution for full provenance reporting via
+    /// [`find_all_values`](Self::find_all_values).
+    pub(crate) provenance: Vec<Map<Profile, Dict>>,
 }
 
 impl Figment {
@@ -119,6 +128,7 @@ impl Figment {
             metadata: Map::new(),
             profile: Profile::Default,
             value: Ok(Map::new()),
+            provenance: Vec::new(),
         }
     }
 
@@ -162,6 +172,7 @@ impl Figment {
                     .flat_map(|(p, map)| std::iter::repeat(p).zip(map.values_mut()))
                     .for_each(|(p, v)| v.map_tag(|t| *t = tag.for_profile(p)));
 
+                self.provenance.push(new.clone());
                 Ok(old.coalesce(new, order))
             }
         };
@@ -350,16 +361,25 @@ impl Figment {
 
     /// Merges the selected profile with the default and global profiles.
     fn merged(&self) -> Result<Value> {
-        let mut map = self.value.clone().map_err(|e| e.resolved(self))?;
+        let map = self.value.clone().map_err(|e| e.resolved(self))?;
+        Ok(Self::resolve_profiles(map, &self.profile))
+    }
+
+    /// Collapse a per-profile `Map<Profile, Dict>` into a single
+    /// [`Value::Dict`] for `profile`, merging the default and global profiles
+    /// the same way [`merged`](Self::merged) does. Shared by `merged` and
+    /// [`find_all_values`](Self::find_all_values) so both resolve profiles
+    /// identically.
+    fn resolve_profiles(mut map: Map<Profile, Dict>, profile: &Profile) -> Value {
         let def = map.remove(&Profile::Default).unwrap_or_default();
         let global = map.remove(&Profile::Global).unwrap_or_default();
 
-        let map = match map.remove(&self.profile) {
-            Some(v) if self.profile.is_custom() => def.merge(v).merge(global),
+        let map = match map.remove(profile) {
+            Some(v) if profile.is_custom() => def.merge(v).merge(global),
             _ => def.merge(global)
         };
 
-        Ok(Value::Dict(Tag::Default, map))
+        Value::Dict(Tag::Default, map)
     }
 
     /// Returns a new `Figment` containing only the sub-dictionaries at `key`.
@@ -414,23 +434,26 @@ impl Figment {
     /// });
     /// ```
     pub fn focus(&self, key: &str) -> Self {
+        fn focus_map(map: &Map<Profile, Dict>, key: &str) -> Map<Profile, Dict> {
+            map.iter()
+                .filter_map(|(k, v)| {
+                    let focused = Value::Dict(Tag::Default, v.clone()).find(key)?;
+                    let dict = focused.into_dict()?;
+                    Some((k.clone(), dict))
+                })
+                .collect()
+        }
+
         fn try_focus(figment: &Figment, key: &str) -> Result<Map<Profile, Dict>> {
             let map = figment.value.clone().map_err(|e| e.resolved(figment))?;
-            let new_map = map.into_iter()
-                .filter_map(|(k, v)| {
-                    let focused = Value::Dict(Tag::Default, v).find(key)?;
-                    let dict = focused.into_dict()?;
-                    Some((k, dict))
-                })
-                .collect();
-
-            Ok(new_map)
+            Ok(focus_map(&map, key))
         }
 
         Figment {
             profile: self.profile.clone(),
             metadata: self.metadata.clone(),
-            value: try_focus(self, key)
+            value: try_focus(self, key),
+            provenance: self.provenance.iter().map(|m| focus_map(m, key)).collect(),
         }
     }
 
@@ -742,6 +765,54 @@ impl Figment {
         self.merged()?
             .find(path)
             .ok_or_else(|| Kind::MissingField(path.to_string().into()).into())
+    }
+
+    /// Returns **every** value contributed at `path` across all merged
+    /// providers, in merge order (lowest → highest priority).
+    ///
+    /// Unlike [`find_value`](Self::find_value), the contributions are *not*
+    /// coalesced: values that a higher-priority provider overrode, or arrays
+    /// it replaced, are all returned. Each returned [`Value`] carries the
+    /// [`Tag`] of the provider that supplied it, so its source can be looked
+    /// up with [`get_metadata`](Self::get_metadata). A provider that did not
+    /// set `path` contributes nothing.
+    ///
+    /// This enables full provenance reporting (e.g. attributing each config
+    /// layer's contribution to a list field) without reconstructing it from
+    /// the original sources.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use figment::{Figment, providers::{Format, Toml}};
+    ///
+    /// figment::Jail::expect_with(|jail| {
+    ///     jail.create_file("Base.toml", r#" plugins = ["a", "b"] "#)?;
+    ///     jail.create_file("Repo.toml", r#" plugins = ["c"] "#)?;
+    ///
+    ///     let figment = Figment::new()
+    ///         .merge(Toml::file("Base.toml"))
+    ///         .merge(Toml::file("Repo.toml"));
+    ///
+    ///     // The merged value only keeps the highest-priority array.
+    ///     assert_eq!(figment.extract_inner::<Vec<String>>("plugins").unwrap(), vec!["c"]);
+    ///
+    ///     // But every layer's contribution is recoverable.
+    ///     let all = figment.find_all_values("plugins");
+    ///     assert_eq!(all.len(), 2);
+    ///     let source = |v: &figment::value::Value| {
+    ///         figment.get_metadata(v.tag()).unwrap().source.as_ref().unwrap().to_string()
+    ///     };
+    ///     assert!(source(&all[0]).contains("Base.toml"));
+    ///     assert!(source(&all[1]).contains("Repo.toml"));
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn find_all_values(&self, path: &str) -> Vec<Value> {
+        self.provenance
+            .iter()
+            .filter_map(|map| Self::resolve_profiles(map.clone(), &self.profile).find(path))
+            .collect()
     }
 
     /// Returns `true` if the combined figment evaluates successfully and
