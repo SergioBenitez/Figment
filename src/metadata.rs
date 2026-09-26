@@ -221,7 +221,7 @@ impl Default for Metadata {
 pub enum Source {
     /// A file: the path to the file.
     File(PathBuf),
-    /// Some programatic value: the source location.
+    /// Some programmatic value: the source location.
     Code(&'static Location<'static>),
     /// A custom source all-together.
     Custom(String),

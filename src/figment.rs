@@ -489,7 +489,7 @@ impl Figment {
     /// booleans more flexibly.
     ///
     /// See [`Value::to_bool_lossy`] and [`Value::to_num_lossy`] for a full
-    /// explanation of the imputs accepted.
+    /// explanation of the inputs accepted.
     ///
     ///
     /// # Example
@@ -576,7 +576,7 @@ impl Figment {
     /// booleans more flexibly.
     ///
     /// See [`Value::to_bool_lossy`] and [`Value::to_num_lossy`] for a full
-    /// explanation of the imputs accepted.
+    /// explanation of the inputs accepted.
     ///
     /// # Example
     ///

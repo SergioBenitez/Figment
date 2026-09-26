@@ -261,7 +261,7 @@ mod tests {
     }
 
     #[test]
-    fn check_compund_values_parse() {
+    fn check_compound_values_parse() {
         fn v<T: Into<Value>>(v: T) -> Value { v.into() }
 
         assert_parse_eq! {

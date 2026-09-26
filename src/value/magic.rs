@@ -1,4 +1,4 @@
-//! (De)serializable values that "magically" use information from the extracing
+//! (De)serializable values that "magically" use information from the extracting
 //! [`Figment`](crate::Figment).
 
 use std::ops::Deref;
@@ -10,7 +10,7 @@ use crate::{Error, value::{ConfiguredValueDe, Interpreter, MapDe, Tag}};
 
 /// Marker trait for "magic" values. Primarily for use with [`Either`].
 pub trait Magic: for<'de> Deserialize<'de> {
-    /// The name of the deserialization pseudo-strucure.
+    /// The name of the deserialization pseudo-structure.
     #[doc(hidden)] const NAME: &'static str;
 
     /// The fields of the pseudo-structure. The last one should be the value.
@@ -27,7 +27,7 @@ pub trait Magic: for<'de> Deserialize<'de> {
 /// Paths in configuration files are often desired to be relative to the
 /// configuration file itself. For example, a path of `a/b.html` configured in a
 /// file `/var/config.toml` might be desired to resolve as `/var/a/b.html`. This
-/// type makes this possible by simply delcaring the configuration value's type
+/// type makes this possible by simply declaring the configuration value's type
 /// as [`RelativePathBuf`].
 ///
 /// # Example
@@ -87,9 +87,9 @@ pub trait Magic: for<'de> Deserialize<'de> {
 ///     assert_eq!(default.path.relative(), Path::new("some/default/path"));
 ///
 ///     jail.create_file("Config.toml", r#"path = "an/override""#)?;
-///     let overriden: Config = figment.merge(Toml::file("Config.toml")).extract()?;
-///     assert_eq!(overriden.path.original(), Path::new("an/override"));
-///     assert_eq!(overriden.path.relative(), jail.directory().join("an/override"));
+///     let overridden: Config = figment.merge(Toml::file("Config.toml")).extract()?;
+///     assert_eq!(overridden.path.original(), Path::new("an/override"));
+///     assert_eq!(overridden.path.relative(), jail.directory().join("an/override"));
 ///
 ///     Ok(())
 /// });
@@ -496,7 +496,7 @@ impl<'de: 'b, 'b, A, B> Deserialize<'de> for Either<A, B>
     {
         use crate::value::ValueVisitor;
 
-        // FIXME: propogate the error properly
+        // FIXME: propagate the error properly
         let value = de.deserialize_struct(A::NAME, A::FIELDS, ValueVisitor)?;
         match A::deserialize(&value) {
             Ok(value) => Ok(Either::Left(value)),

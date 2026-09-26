@@ -342,7 +342,7 @@ impl Value {
 
     /// Converts `self` to a [`Num`] if it is a [`Value::Num`] or if it is a
     /// [`Value::String`] that parses as a `usize` ([`Num::USize`]), `isize`
-    /// ([`Num::ISize`]), or `f64` ([`Num::F64`]), in that order of precendence.
+    /// ([`Num::ISize`]), or `f64` ([`Num::F64`]), in that order of precedence.
     ///
     /// # Examples
     ///

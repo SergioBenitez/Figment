@@ -10,7 +10,7 @@ use crate::{Figment, Profile, Metadata, value::Tag};
 /// A simple alias to `Result` with an error type of [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// An error that occured while producing data or extracting a configuration.
+/// An error that occurred while producing data or extracting a configuration.
 ///
 /// # Constructing Errors
 ///
@@ -89,7 +89,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Error {
     /// The tag of the value that errored. We use this to lookup the `metadata`.
     tag: Tag,
-    /// The profile that was selected when the error occured, if any.
+    /// The profile that was selected when the error occurred, if any.
     pub profile: Option<Profile>,
     /// The metadata for the provider of the value that errored, if known.
     pub metadata: Option<Metadata>,

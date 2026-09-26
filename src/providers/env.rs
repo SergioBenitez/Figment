@@ -206,7 +206,7 @@ impl Env {
         env
     }
 
-    /// Applys an additional filter to the keys of environment variables being
+    /// Applies an additional filter to the keys of environment variables being
     /// considered.
     ///
     /// ```rust
@@ -234,7 +234,7 @@ impl Env {
         self.chain(move |prev| prev.filter(|v| filter(v)))
     }
 
-    /// Applys an additional mapping to the keys of environment variables being
+    /// Applies an additional mapping to the keys of environment variables being
     /// considered.
     ///
     /// ```rust
@@ -291,7 +291,7 @@ impl Env {
         self.chain(move |prev| prev.map(|v| mapper(&v).into_owned()))
     }
 
-    /// Simultanously filters and maps the keys of environment variables being
+    /// Simultaneously filters and maps the keys of environment variables being
     /// considered.
     ///
     /// The returned `Env` only yields values for which `f` returns `Some`.
