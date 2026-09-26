@@ -166,7 +166,7 @@
 //! about configuration sources. All values extracted from a figment are
 //! [tagged](crate::value::Tag) with the originating [`Metadata`] and
 //! [`Profile`]. The tag is preserved across merges, joins, and errors, which
-//! also include the [`path`](Error::path) of the offending key. Precise
+//! also include the [`path`](error::ErrorInner::path) of the offending key. Precise
 //! tracking allows for rich error messages as well as ["magic"] values like
 //! [`RelativePathBuf`], which automatically creates a path relative to the
 //! configuration file in which it was declared.
