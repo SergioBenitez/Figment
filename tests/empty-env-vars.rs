@@ -60,3 +60,19 @@ fn empty_env_vars() {
         Ok(())
     });
 }
+
+#[test]
+fn ignore_empty_values() {
+    figment::Jail::expect_with(|jail| {
+        jail.set_env("EMPTY", "");
+        jail.set_env("WHITESPACE", " ");
+        jail.set_env("VALUE", "value");
+
+        let config = Figment::from(Env::raw().ignore_empty(true));
+        assert!(config.find_value("empty").is_err());
+        assert!(config.find_value("whitespace").is_ok());
+        assert_eq!(config.find_value("value")?.as_str(), Some("value"));
+
+        Ok(())
+    });
+}

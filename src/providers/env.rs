@@ -123,6 +123,7 @@ pub struct Env {
     prefix: Option<String>,
     /// We use this to generate better metadata when available.
     lowercase: bool,
+    ignore_empty: bool,
     parser_fn: Box<dyn Parser>,
 }
 
@@ -139,6 +140,7 @@ impl Env {
             profile: Profile::Default,
             prefix: None,
             lowercase: true,
+            ignore_empty: false,
             parser_fn: Box::new(|v| v.parse().expect("infallible")),
         }
     }
@@ -152,6 +154,7 @@ impl Env {
             profile: self.profile,
             prefix: self.prefix,
             lowercase: true,
+            ignore_empty: self.ignore_empty,
             parser_fn: self.parser_fn,
         }
     }
@@ -419,6 +422,26 @@ impl Env {
         self
     }
 
+    /// Whether to ignore variables with empty values. Defaults to `false`.
+    ///
+    /// ```rust
+    /// use figment::{Jail, providers::Env};
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     jail.clear_env();
+    ///     jail.set_env("EMPTY", "");
+    ///     jail.set_env("WHITESPACE", " ");
+    ///
+    ///     assert_eq!(Env::raw().iter().count(), 2);
+    ///     assert_eq!(Env::raw().ignore_empty(true).iter().count(), 1);
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn ignore_empty(mut self, ignore: bool) -> Self {
+        self.ignore_empty = ignore;
+        self
+    }
+
     /// Splits each environment variable key at `pattern`, creating nested
     /// dictionaries for each split. Specifically, nested dictionaries are
     /// created for components delimited by `pattern` in the environment
@@ -570,6 +593,7 @@ impl Env {
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=(Uncased<'static>, String)> + 'a {
         std::env::vars_os()
             .filter(|(k, _)| !k.is_empty())
+            .filter(move |(_, value)| !self.ignore_empty || !value.is_empty())
             .filter_map(move |(k, v)| {
                 let key = k.to_string_lossy();
                 let key = (self.filter_map)(UncasedStr::new(key.trim()))?;
