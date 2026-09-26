@@ -102,10 +102,10 @@ impl Value {
     }
 
     /// Looks up and returns the value at path `path`, where `path` is of the
-    /// form `a.b.c` where `a`, `b`, and `c` are keys to dictionaries. If the
-    /// key is empty, simply returns `self`. If the key is not empty and `self`
-    /// or any of the values for non-leaf keys in the path are not dictionaries,
-    /// returns `None`.
+    /// form `a.b.c`. Each component is interpreted as a key when the current
+    /// value is a dictionary and as a `usize` index when it is an array. If the
+    /// key is empty, simply returns `self`. If the key is not empty and any
+    /// path component is invalid, returns `None`.
     ///
     /// This method consumes `self`. See [`Value::find_ref()`] for a
     /// non-consuming variant.
@@ -135,11 +135,21 @@ impl Value {
     ///
     /// assert!(value.clone().find("apple.pie").is_none());
     /// assert!(value.clone().find("pineapple").is_none());
+    ///
+    /// let pies = Value::from(map!["pies" => vec![
+    ///     map!["name" => "apple"],
+    ///     map!["name" => "pumpkin"],
+    /// ]]);
+    /// assert_eq!(pies.find("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
     pub fn find(self, path: &str) -> Option<Value> {
         fn find(mut keys: Split<char>, value: Value) -> Option<Value> {
             match keys.next() {
-                Some(k) if !k.is_empty() => find(keys, value.into_dict()?.remove(k)?),
+                Some(k) if !k.is_empty() => match value {
+                    Value::Dict(_, mut values) => find(keys, values.remove(k)?),
+                    Value::Array(_, values) => find(keys, values.into_iter().nth(k.parse().ok()?)?),
+                    _ => None,
+                },
                 Some(_) | None => Some(value)
             }
         }
@@ -175,11 +185,21 @@ impl Value {
     ///
     /// assert!(value.find_ref("apple.pie").is_none());
     /// assert!(value.find_ref("pineapple").is_none());
+    ///
+    /// let pies = Value::from(map!["pies" => vec![
+    ///     map!["name" => "apple"],
+    ///     map!["name" => "pumpkin"],
+    /// ]]);
+    /// assert_eq!(pies.find_ref("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
     pub fn find_ref<'a>(&'a self, path: &str) -> Option<&'a Value> {
         fn find<'v>(mut keys: Split<char>, value: &'v Value) -> Option<&'v Value> {
             match keys.next() {
-                Some(k) if !k.is_empty() => find(keys, value.as_dict()?.get(k)?),
+                Some(k) if !k.is_empty() => match value {
+                    Value::Dict(_, values) => find(keys, values.get(k)?),
+                    Value::Array(_, values) => find(keys, values.get(k.parse::<usize>().ok()?)?),
+                    _ => None,
+                },
                 Some(_) | None => Some(value)
             }
         }
@@ -418,6 +438,37 @@ impl Value {
             Value::Array(_, v) => v.iter_mut().for_each(|v| v.map_tag(f)),
             _ => { /* already handled */ }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Figment;
+    use crate::providers::Serialized;
+    use crate::util::map;
+    use super::Value;
+
+    #[test]
+    fn find_traverses_arrays() {
+        let data = map! {
+            "items" => vec![
+                map!["name" => "first"],
+                map!["name" => "second"],
+            ],
+            "0" => vec![map!["name" => "zero"]],
+        };
+
+        let value = Value::from(data.clone());
+
+        assert_eq!(value.clone().find("items.1.name").unwrap().as_str(), Some("second"));
+        assert_eq!(value.find_ref("items.0.name").unwrap().as_str(), Some("first"));
+        assert_eq!(value.find_ref("0.0.name").unwrap().as_str(), Some("zero"));
+        assert!(value.find_ref("items.name").is_none());
+        assert!(value.find_ref("items.2").is_none());
+
+        let figment = Figment::from(Serialized::default("providers", data));
+        let focused = figment.focus("providers.items.1");
+        assert_eq!(focused.extract_inner::<String>("name").unwrap(), "second");
     }
 }
 
