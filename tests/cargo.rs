@@ -1,3 +1,5 @@
+#![cfg(all(feature = "test", feature = "toml", feature = "json"))]
+
 use serde::Deserialize;
 use figment::{Figment, providers::{Format, Toml, Json, Env}};
 

@@ -1,3 +1,5 @@
+#![cfg(feature = "yaml")]
+
 use serde::Deserialize;
 use figment::{Figment, providers::{Format, Yaml}};
 

@@ -1367,7 +1367,7 @@ mod _serde {
     };
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "toml"))]
 mod tests {
     use crate::Figment;
 

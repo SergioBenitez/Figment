@@ -1,3 +1,5 @@
+#![cfg(feature = "test")]
+
 use figment::{Figment, Jail, Profile};
 use figment::{value::{Value, magic::Tagged}, providers::Serialized};
 

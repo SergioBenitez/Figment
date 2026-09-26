@@ -1,3 +1,5 @@
+#![cfg(feature = "toml")]
+
 use figment::{Figment, providers::{Toml, Format}};
 use serde::Deserialize;
 
