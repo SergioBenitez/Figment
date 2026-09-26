@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{Profile, Provider, Metadata};
 use crate::coalesce::Coalescible;
-use crate::value::{Map, Dict};
+use crate::value::{Map, Dict, Value};
 use crate::error::Error;
 use crate::util::nest;
 
@@ -12,14 +12,27 @@ crate::util::cloneable_fn_trait!(
     FilterMap: for<'a> Fn(&'a UncasedStr) -> Option<Uncased<'a>> + 'static
 );
 
+mod parser {
+    use std::fmt;
+
+    use crate::value::Value;
+
+    crate::util::cloneable_fn_trait!(
+        pub Parser: for<'a> Fn(&'a str) -> Value
+    );
+}
+
+use parser::Parser;
+
 /// A [`Provider`] that sources its values from environment variables.
 ///
 /// All key-lookups and comparisons are case insensitive, facilitated by the
 /// [`UncasedStr`] and [`Uncased`] types. By default, environment variable names
 /// are lowercased before being emitted as [key paths] in the provided data, but
 /// this default can be changed with [`Env::lowercase()`]. Environment variable
-/// values can contain structured data, parsed as a [`Value`], with syntax
-/// resembling TOML:
+/// values can contain structured data, parsed as a [`Value`]. A custom parser
+/// can be specified with [`Env::parser()`]. By default, values are parsed with
+/// syntax resembling TOML:
 ///
 ///   * [`Bool`]: `true`, `false` (e.g, `APP_VAR=true`)
 ///   * [`Num::F64`]: any float containing `.`: (e.g, `APP_VAR=1.2`, `APP_VAR=-0.002`)
@@ -110,6 +123,7 @@ pub struct Env {
     prefix: Option<String>,
     /// We use this to generate better metadata when available.
     lowercase: bool,
+    parser_fn: Box<dyn Parser>,
 }
 
 impl fmt::Debug for Env {
@@ -125,6 +139,7 @@ impl Env {
             profile: Profile::Default,
             prefix: None,
             lowercase: true,
+            parser_fn: Box::new(|v| v.parse().expect("infallible")),
         }
     }
 
@@ -137,7 +152,39 @@ impl Env {
             profile: self.profile,
             prefix: self.prefix,
             lowercase: true,
+            parser_fn: self.parser_fn,
         }
+    }
+
+    /// Sets the parser for environment variable values.
+    ///
+    /// This allows values to be parsed in any format, such as JSON or YAML.
+    ///
+    /// ```rust
+    /// use figment::{Figment, Jail, providers::Env};
+    ///
+    /// #[derive(Debug, PartialEq, serde::Deserialize)]
+    /// struct Config {
+    ///     numbers: Vec<u32>,
+    /// }
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     jail.set_env("NUMBERS", "[1, 2, 3]");
+    ///
+    ///     let config: Config = Figment::from(Env::raw().parser(|value| {
+    ///         serde_json::from_str(value)
+    ///             .unwrap_or_else(|_| figment::value::Value::from(value))
+    ///     })).extract()?;
+    ///
+    ///     assert_eq!(config, Config { numbers: vec![1, 2, 3] });
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn parser<F>(mut self, parser: F) -> Self
+        where F: for<'a> Fn(&'a str) -> Value + Clone + 'static
+    {
+        self.parser_fn = Box::new(parser);
+        self
     }
 
     /// Constructs and `Env` provider that does not filter or map any
@@ -633,7 +680,7 @@ impl Provider for Env {
     fn data(&self) -> Result<Map<Profile, Dict>, Error> {
         let mut dict = Dict::new();
         for (k, v) in self.iter() {
-            let nested_dict = nest(k.as_str(), v.parse().expect("infallible"))
+            let nested_dict = nest(k.as_str(), (self.parser_fn)(&v))
                 .into_dict()
                 .expect("key is non-empty: must have dict");
 
