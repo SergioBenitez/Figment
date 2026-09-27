@@ -9,20 +9,12 @@ use crate::util::nest;
 use uncased::{Uncased, UncasedStr};
 
 crate::util::cloneable_fn_trait!(
-    FilterMap: for<'a> Fn(&'a UncasedStr) -> Option<Uncased<'a>> + 'static
+    FilterMap (CloneFilterMap): for<'a> Fn(&'a UncasedStr) -> Option<Uncased<'a>> + 'static
 );
 
-mod parser {
-    use std::fmt;
-
-    use crate::value::Value;
-
-    crate::util::cloneable_fn_trait!(
-        pub Parser: for<'a> Fn(&'a str) -> Value
-    );
-}
-
-use parser::Parser;
+crate::util::cloneable_fn_trait!(
+    Parser (CloneParser): for<'a> Fn(&'a str) -> Value + 'static
+);
 
 /// A [`Provider`] that sources its values from environment variables.
 ///
@@ -31,8 +23,8 @@ use parser::Parser;
 /// are lowercased before being emitted as [key paths] in the provided data, but
 /// this default can be changed with [`Env::lowercase()`]. Environment variable
 /// values can contain structured data, parsed as a [`Value`]. A custom parser
-/// can be specified with [`Env::parser()`]. By default, values are parsed with
-/// syntax resembling TOML:
+/// can be specified with [`Env::parser()`] or [`Env::try_parser()`]. By
+/// default, values are parsed with syntax resembling TOML:
 ///
 ///   * [`Bool`]: `true`, `false` (e.g, `APP_VAR=true`)
 ///   * [`Num::F64`]: any float containing `.`: (e.g, `APP_VAR=1.2`, `APP_VAR=-0.002`)
@@ -141,7 +133,7 @@ impl Env {
             prefix: None,
             lowercase: true,
             ignore_empty: false,
-            parser_fn: Box::new(|v| v.parse().expect("infallible")),
+            parser_fn: Box::new(|v| v.parse().unwrap_or_else(|_| v.into())),
         }
     }
 
@@ -161,25 +153,28 @@ impl Env {
 
     /// Sets the parser for environment variable values.
     ///
-    /// This allows values to be parsed in any format, such as JSON or YAML.
+    /// Use [`Env::try_parser()`] for parsers that can fail.
     ///
     /// ```rust
     /// use figment::{Figment, Jail, providers::Env};
     ///
     /// #[derive(Debug, PartialEq, serde::Deserialize)]
     /// struct Config {
-    ///     numbers: Vec<u32>,
+    ///     colors: Vec<String>,
+    ///     primary: Vec<String>,
     /// }
     ///
     /// Jail::expect_with(|jail| {
-    ///     jail.set_env("NUMBERS", "[1, 2, 3]");
+    ///     jail.set_env("APP_COLORS", "red,green,blue");
+    ///     jail.set_env("APP_PRIMARY", "green");
     ///
-    ///     let config: Config = Figment::from(Env::raw().parser(|value| {
-    ///         serde_json::from_str(value)
-    ///             .unwrap_or_else(|_| figment::value::Value::from(value))
-    ///     })).extract()?;
+    ///     let env = Env::prefixed("APP_").parser(|value| {
+    ///         value.split(',').collect::<Vec<_>>().into()
+    ///     });
     ///
-    ///     assert_eq!(config, Config { numbers: vec![1, 2, 3] });
+    ///     let config: Config = Figment::from(env).extract()?;
+    ///     assert_eq!(config.colors, ["red", "green", "blue"]);
+    ///     assert_eq!(config.primary, ["green"]);
     ///     Ok(())
     /// });
     /// ```
@@ -188,6 +183,56 @@ impl Env {
     {
         self.parser_fn = Box::new(parser);
         self
+    }
+
+    /// Sets a fallible parser for environment variable values.
+    ///
+    /// If parsing fails, the original value is emitted as a string.
+    ///
+    /// ```rust
+    /// # #[cfg(all(feature = "test", feature = "json"))]
+    /// # fn main() {
+    /// use figment::{Figment, Jail, providers::Env};
+    ///
+    /// #[derive(Debug, PartialEq, serde::Deserialize)]
+    /// struct Config {
+    ///     database: Database,
+    ///     environment: String,
+    /// }
+    ///
+    /// #[derive(Debug, PartialEq, serde::Deserialize)]
+    /// struct Database {
+    ///     host: String,
+    ///     ports: Vec<u16>,
+    /// }
+    ///
+    /// Jail::expect_with(|jail| {
+    ///     jail.set_env("APP_ENVIRONMENT", "development");
+    ///     jail.set_env("APP_DATABASE", r#"{
+    ///         "host": "localhost",
+    ///         "ports": [8000, 8001]
+    ///     }"#);
+    ///
+    ///     let env = Env::prefixed("APP_")
+    ///         .try_parser(|value| serde_json::from_str(value));
+    ///
+    ///     let config: Config = Figment::from(env).extract()?;
+    ///     assert_eq!(config.environment, "development");
+    ///     assert_eq!(config.database, Database {
+    ///         host: "localhost".into(),
+    ///         ports: vec![8000, 8001],
+    ///     });
+    ///
+    ///     Ok(())
+    /// });
+    /// # }
+    /// # #[cfg(not(all(feature = "test", feature = "json")))]
+    /// # fn main() {}
+    /// ```
+    pub fn try_parser<F, E>(self, parser: F) -> Self
+        where F: for<'a> Fn(&'a str) -> Result<Value, E> + Clone + 'static,
+    {
+        self.parser(move |v| parser(v).unwrap_or_else(|_| v.into()))
     }
 
     /// Constructs and `Env` provider that does not filter or map any

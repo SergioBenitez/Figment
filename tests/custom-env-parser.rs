@@ -1,12 +1,13 @@
-#![cfg(all(feature = "test", feature = "json", feature = "yaml"))]
+#![cfg(all(feature = "test", feature = "json"))]
 
 use figment::{Figment, Jail, providers::Env};
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, PartialEq, serde::Deserialize)]
 struct Config {
     foo: Vec<u32>,
     bar: Bar,
     int_value: u32,
+    environment: String,
 }
 
 #[derive(Debug, PartialEq, serde::Deserialize)]
@@ -15,33 +16,41 @@ struct Bar {
 }
 
 #[test]
-fn custom_env_parser() {
+fn infallible_parser() {
     Jail::expect_with(|jail| {
-        jail.set_env("FOO", "[1, 2, 3]");
-        jail.set_env("BAR", "{\"x\": 123}");
-        jail.set_env("INT_VALUE", "0");
+        jail.set_env("APP_VALUES", "one,two,three");
+        jail.set_env("APP_SINGLE", "one");
 
-        let config = Figment::from(Env::raw().parser(|value| {
-            serde_json::from_str(value)
-                .unwrap_or_else(|_| figment::value::Value::from(value))
-        })).extract::<Config>()?;
+        let figment = Figment::from(Env::prefixed("APP_").parser(|value| {
+            value.split(',').collect::<Vec<_>>().into()
+        }));
 
-        assert_eq!(config.foo, vec![1, 2, 3]);
-        assert_eq!(config.bar, Bar { x: 123 });
-        assert_eq!(config.int_value, 0);
+        let values = figment.extract_inner::<Vec<String>>("values")?;
+        let single = figment.extract_inner::<Vec<String>>("single")?;
+        assert_eq!(values, ["one", "two", "three"]);
+        assert_eq!(single, ["one"]);
+        Ok(())
+    });
+}
 
-        jail.set_env("FOO", "[\n1 # One\n, 2 # Two\n, 3, # Three\n]");
-        jail.set_env("BAR", "x: 321");
-        jail.set_env("INT_VALUE", "987");
+#[test]
+fn fallible_parser() {
+    Jail::expect_with(|jail| {
+        jail.set_env("APP_FOO", "[1, 2, 3]");
+        jail.set_env("APP_BAR", "{\"x\": 123}");
+        jail.set_env("APP_INT_VALUE", "0");
+        jail.set_env("APP_ENVIRONMENT", "development");
 
-        let config = Figment::from(Env::raw().parser(|value| {
-            serde_yaml::from_str(value)
-                .unwrap_or_else(|_| figment::value::Value::from(value))
-        })).extract::<Config>()?;
+        let env = Env::prefixed("APP_")
+            .try_parser(|value| serde_json::from_str(value));
+        let config = Figment::from(env).extract::<Config>()?;
 
-        assert_eq!(config.foo, vec![1, 2, 3]);
-        assert_eq!(config.bar, Bar { x: 321 });
-        assert_eq!(config.int_value, 987);
+        assert_eq!(config, Config {
+            foo: vec![1, 2, 3],
+            bar: Bar { x: 123 },
+            int_value: 0,
+            environment: "development".into(),
+        });
 
         Ok(())
     });

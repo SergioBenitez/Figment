@@ -327,16 +327,10 @@ macro_rules! make_cloneable {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! cloneable_fn_trait {
-    (pub $Name:ident: $($rest:tt)*) => {
-        #[allow(private_bounds)]
-        pub(crate) trait $Name: $($rest)* + Cloneable + 'static { }
+    ($Name:ident ($Cloneable:ident): $($rest:tt)*) => {
+        trait $Name: $($rest)* + $Cloneable + 'static { }
         impl<F: Clone + 'static> $Name for F where F: $($rest)* { }
-        $crate::make_cloneable!($Name: Cloneable);
-    };
-    ($Name:ident: $($rest:tt)*) => {
-        trait $Name: $($rest)* + Cloneable + 'static { }
-        impl<F: Clone + 'static> $Name for F where F: $($rest)* { }
-        $crate::make_cloneable!($Name: Cloneable);
+        $crate::make_cloneable!($Name: $Cloneable);
     }
 }
 

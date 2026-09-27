@@ -328,7 +328,7 @@ impl From<String> for Source {
 }
 
 crate::util::cloneable_fn_trait!(
-    Interpolator: Fn(&Profile, &[&str]) -> String + Send + Sync + 'static
+    Interpolator (Cloneable): Fn(&Profile, &[&str]) -> String + Send + Sync + 'static
 );
 
 fn default_interpolater(profile: &Profile, keys: &[&str]) -> String {
