@@ -8,8 +8,8 @@ use serde::{ser, de};
 
 use crate::{Figment, Profile, Metadata, key::KeyPath, value::Tag};
 
-/// A simple alias to `Result` with an error type of [`Error`].
-pub type Result<T> = std::result::Result<T, Error>;
+/// An alias to [`std::result::Result`] with [`Error`] as the default error type.
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// An error that occurred while producing data or extracting a configuration.
 ///

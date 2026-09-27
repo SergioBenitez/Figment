@@ -2,6 +2,7 @@ use std::fs::{File, self};
 use std::io::{Write, BufWriter};
 use std::path::{Path, PathBuf};
 use std::fmt::Display;
+use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::collections::HashMap;
 
@@ -10,8 +11,9 @@ use parking_lot::Mutex;
 
 use crate::error::Result;
 
-// TODO: Clear environment variables before entering this? Will they mess with
+// TODO: Clear environment variables before entering? Will they mess with
 // anything else?
+
 /// A "sandboxed" environment with isolated env and file system namespace.
 ///
 /// `Jail` creates a pseudo-sandboxed (not _actually_ sandboxed) environment for
@@ -24,9 +26,6 @@ use crate::error::Result;
 ///   * Keeps track of environment variables created with [`Jail::set_env()`]
 ///     and clears them when the `Jail` exits.
 ///   * Deletes the temporary directory and all of its contents when exiting.
-///
-/// Additionally, because `Jail` expects functions that return a [`Result`],
-/// the `?` operator can be used liberally in a jail:
 ///
 /// ```rust
 /// use figment::{Figment, Jail, providers::{Format, Toml, Env}};
@@ -54,6 +53,15 @@ use crate::error::Result;
 ///     Ok(())
 /// });
 /// ```
+///
+/// ## Errors
+///
+/// [`Jail::try_with()`] returns a `Box<dyn Error>`, allowing any error that
+/// implements [`Error`] to be propagated with `?` inside the call. To retrieve
+/// the original error, downcast. For example:
+/// `error.downcast::<figment::Error>()` recovers a
+/// [`figment::Error`](crate::Error), including its kind, path, and metadata.
+/// Alternatively, inspect the error inside the closure before using `?`.
 #[cfg_attr(nightly, doc(cfg(feature = "test")))]
 pub struct Jail {
     _directory: TempDir,
@@ -105,7 +113,9 @@ impl Jail {
     /// });
     /// ```
     #[track_caller]
-    pub fn expect_with<F: FnOnce(&mut Jail) -> Result<()>>(f: F) {
+    pub fn expect_with<F>(f: F)
+        where F: FnOnce(&mut Jail) -> Result<(), Box<dyn Error>>
+    {
         if let Err(e) = Jail::try_with(f) {
             panic!("jail failed: {}", e)
         }
@@ -128,17 +138,19 @@ impl Jail {
     /// });
     /// ```
     #[track_caller]
-    pub fn try_with<F: FnOnce(&mut Jail) -> Result<()>>(f: F) -> Result<()> {
+    pub fn try_with<F>(f: F) -> Result<(), Box<dyn Error>>
+        where F: FnOnce(&mut Jail) -> Result<(), Box<dyn Error>>
+    {
         let _lock = LOCK.lock();
-        let directory = TempDir::new().map_err(as_string)?;
+        let directory = TempDir::new()?;
         let mut jail = Jail {
-            canonical_dir: directory.path().canonicalize().map_err(as_string)?,
+            canonical_dir: directory.path().canonicalize()?,
             _directory: directory,
-            saved_cwd: std::env::current_dir().map_err(as_string)?,
+            saved_cwd: std::env::current_dir()?,
             saved_env_vars: HashMap::new(),
         };
 
-        std::env::set_current_dir(jail.directory()).map_err(as_string)?;
+        std::env::set_current_dir(jail.directory())?;
         f(&mut jail)
     }
 
