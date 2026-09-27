@@ -12,6 +12,32 @@ use crate::Figment;
 use crate::error::{Error, Kind, Result};
 use crate::value::{Value, Num, Empty, Dict, Tag};
 
+pub(crate) struct MissingFieldDeserializer<'a>(pub &'a str);
+
+impl MissingFieldDeserializer<'_> {
+    fn error(self) -> Error {
+        Kind::MissingField(self.0.to_string().into()).into()
+    }
+}
+
+impl<'de> Deserializer<'de> for MissingFieldDeserializer<'_> {
+    type Error = Error;
+
+    fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value> {
+        Err(self.error())
+    }
+
+    fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        visitor.visit_none::<Error>().map_err(|_| self.error())
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string seq enum
+        bytes byte_buf map struct unit newtype_struct ignored_any unit_struct
+        tuple_struct tuple identifier
+    }
+}
+
 pub trait Interpreter {
     fn interpret_as_bool(v: &Value) -> Cow<'_, Value> {
         Cow::Borrowed(v)

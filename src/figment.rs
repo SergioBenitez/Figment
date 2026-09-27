@@ -4,7 +4,9 @@ use serde::de::Deserialize;
 
 use crate::{Profile, Provider, Metadata};
 use crate::error::{Kind, Result};
-use crate::value::{Value, Map, Dict, Tag, ConfiguredValueDe, DefaultInterpreter, LossyInterpreter};
+use crate::value::{Value, Map, Dict, Tag, Interpreter};
+use crate::value::{ConfiguredValueDe, DefaultInterpreter, LossyInterpreter};
+use crate::value::MissingFieldDeserializer;
 use crate::coalesce::{Coalescible, Order};
 
 /// Combiner of [`Provider`]s for configuration value extraction.
@@ -541,8 +543,26 @@ impl Figment {
         T::deserialize(ConfiguredValueDe::<'_, LossyInterpreter>::from(self, &value))
     }
 
+    fn extract_inner_with<'a, T, I>(&self, path: &str) -> Result<T>
+        where T: Deserialize<'a>, I: Interpreter
+    {
+        let value = self.merged()?;
+        let value = match value.find(path) {
+            Some(value) => value,
+            None => return T::deserialize(MissingFieldDeserializer(path)),
+        };
+
+        let de = ConfiguredValueDe::<'_, I>::from(self, &value);
+        T::deserialize(de).map_err(|e| e.with_path(path))
+    }
+
     /// Deserializes the value at the `key` path in the collected value into
     /// `T`.
+    ///
+    /// If `key` does not exist, extracting an [`Option<T>`](Option) returns
+    /// `Ok(None)`. Other types return a [`MissingField`] error.
+    ///
+    /// [`MissingField`]: crate::error::Kind::MissingField
     ///
     /// # Example
     ///
@@ -567,9 +587,7 @@ impl Figment {
     /// });
     /// ```
     pub fn extract_inner<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
-        let value = self.find_value(path)?;
-        let de = ConfiguredValueDe::<'_, DefaultInterpreter>::from(self, &value);
-        T::deserialize(de).map_err(|e| e.with_path(path))
+        self.extract_inner_with::<T, DefaultInterpreter>(path)
     }
 
     /// As [`extract`](Figment::extract_lossy), but interpret numbers and
@@ -601,9 +619,7 @@ impl Figment {
     /// });
     /// ```
     pub fn extract_inner_lossy<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
-        let value = self.find_value(path)?;
-        let de = ConfiguredValueDe::<'_, LossyInterpreter>::from(self, &value);
-        T::deserialize(de).map_err(|e| e.with_path(path))
+        self.extract_inner_with::<T, LossyInterpreter>(path)
     }
 
     /// Returns an iterator over the metadata for all of the collected values in
@@ -878,4 +894,66 @@ impl Default for Figment {
 fn is_send_sync() {
     fn check_for_send_sync<T: Send + Sync>() {}
     check_for_send_sync::<Figment>();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::Serialized;
+    use crate::value::Empty;
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[serde(transparent)]
+    struct Optional(Option<String>);
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Required {
+        _value: String,
+    }
+
+    #[test]
+    fn missing_optional_inner_is_none() {
+        let figment = Figment::new();
+        assert_eq!(figment.extract_inner::<Option<String>>("missing").unwrap(), None);
+        assert_eq!(figment.extract_inner_lossy::<Option<String>>("missing").unwrap(), None);
+        assert_eq!(figment.extract_inner::<Optional>("missing").unwrap(), Optional(None));
+
+        for error in [
+            figment.extract_inner::<String>("missing").unwrap_err(),
+            figment.extract_inner::<Required>("missing").unwrap_err(),
+            figment.extract_inner::<Value>("missing").unwrap_err(),
+        ] {
+            assert!(matches!(error.kind, Kind::MissingField(ref key) if key == "missing"));
+        }
+
+        assert!(figment.find_value("missing").unwrap_err().missing());
+    }
+
+    #[test]
+    fn present_none_is_a_value() {
+        let figment = Figment::from(Serialized::default("value", Option::<String>::None));
+        let value = figment.extract_inner::<Value>("value").unwrap();
+        assert_eq!(value.to_empty(), Some(Empty::None));
+    }
+
+    #[test]
+    fn provider_errors_are_not_missing_values() {
+        struct Missing;
+
+        impl Provider for Missing {
+            fn metadata(&self) -> Metadata {
+                Metadata::named("missing")
+            }
+
+            fn data(&self) -> Result<Map<Profile, Dict>> {
+                Err(Kind::MissingField("provider".into()).into())
+            }
+        }
+
+        let error = Figment::from(Missing)
+            .extract_inner::<Option<String>>("missing")
+            .unwrap_err();
+
+        assert!(matches!(error.kind, Kind::MissingField(ref key) if key == "provider"));
+    }
 }
