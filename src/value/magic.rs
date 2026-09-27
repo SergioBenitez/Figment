@@ -95,6 +95,93 @@ pub trait Magic: for<'de> Deserialize<'de> {
 /// });
 /// ```
 ///
+/// # Enums
+///
+/// `RelativePathBuf` works as expected in externally tagged enums.
+/// Unfortunately, due to limitations in `serde`, it cannot work correctly in
+/// internally tagged, adjacently tagged, or untagged enums. This is because
+/// serde buffers values in the latter case, losing the metadata needed to
+/// resolve a path relative to its source.
+///
+/// For example, the externally tagged enum below preserves the source of
+/// `path`. Here, `Files` is the tag, which appears in the file as `[Files]`:
+///
+/// ```rust
+/// use serde::Deserialize;
+/// use figment::{Figment, Jail, value::magic::RelativePathBuf};
+/// use figment::providers::{Format, Toml};
+///
+/// #[derive(Deserialize)]
+/// enum Config {
+///     Files { path: RelativePathBuf },
+/// }
+///
+/// Jail::expect_with(|jail| {
+///     jail.create_file("Config.toml", r#"
+///         [Files]
+///         path = "assets"
+///     "#)?;
+///
+///     let config = Figment::from(Toml::file("Config.toml")).extract()?;
+///     let Config::Files { path } = config;
+///     assert_eq!(path.relative(), jail.directory().join("assets"));
+///     Ok(())
+/// });
+/// ```
+///
+/// If instead `Config` used an untagged representation, extracting the same
+/// `RelativePathBuf` would fail:
+///
+/// ```rust
+/// use serde::Deserialize;
+/// use figment::{Figment, Jail, value::magic::RelativePathBuf};
+/// use figment::providers::{Format, Toml};
+///
+/// #[derive(Deserialize)]
+/// #[serde(untagged)]
+/// enum Config {
+///     Files { path: RelativePathBuf },
+/// }
+///
+/// Jail::expect_with(|jail| {
+///     jail.create_file("Config.toml", r#"
+///         path = "assets"
+///     "#)?;
+///
+///     let config = Figment::from(Toml::file("Config.toml"));
+///     assert!(config.extract::<Config>().is_err());
+///     Ok(())
+/// });
+/// ```
+///
+/// To workaround this issue, deserialize the path as a [`PathBuf`] and resolve
+/// it manually:
+///
+/// ```rust
+/// use std::path::PathBuf;
+/// use serde::Deserialize;
+/// use figment::{Figment, Jail};
+/// use figment::providers::{Format, Toml};
+///
+/// #[derive(Deserialize)]
+/// #[serde(untagged)]
+/// enum Config {
+///     Files { path: PathBuf },
+/// }
+///
+/// Jail::expect_with(|jail| {
+///     jail.create_file("Config.toml", r#"
+///         path = "assets"
+///     "#)?;
+///
+///     let config = Figment::from(Toml::file("Config.toml")).extract()?;
+///     let Config::Files { path } = config;
+///     let expected = jail.directory().join("assets");
+///     assert_eq!(jail.directory().join(path), expected);
+///     Ok(())
+/// });
+/// ```
+///
 /// # Serialization
 ///
 /// By default, a `RelativePathBuf` serializes into a structure that can only
