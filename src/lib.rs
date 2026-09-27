@@ -580,6 +580,7 @@
 //! [can break error attribution]:
 //! https://github.com/SergioBenitez/Figment/issues/80#issuecomment-1701946622
 
+pub mod key;
 pub mod value;
 pub mod providers;
 pub mod error;

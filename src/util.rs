@@ -239,12 +239,13 @@ pub mod vec_tuple_map {
     }
 }
 
+use crate::key::KeyPath;
 use crate::value::{Value, Dict};
 
-/// Given a key path `key` of the form `a.b.c`, creates nested dictionaries for
-/// for every path component delimited by `.` in the path string (3 in `a.b.c`),
-/// each a parent of the next, and the leaf mapping to `value` (`a` -> `b` ->
-/// `c` -> `value`).
+/// Given a key path `key`, creates nested dictionaries for every component in
+/// the path, each a parent of the next, and the leaf mapping to `value` (`a` ->
+/// `b` -> `c` -> `value` for `a.b.c`). See [`KeyPath`] for supported key path
+/// types.
 ///
 /// If `key` is empty, simply returns `value`. Otherwise, `Value` will be a
 /// dictionary with the nested mappings.
@@ -265,22 +266,29 @@ use crate::value::{Value, Dict};
 /// assert_eq!(found_leaf, &leaf);
 /// assert_eq!(dict.find_ref("tea.leaf").unwrap(), &leaf);
 ///
+/// let dict = nest(["tea.leaf"], leaf.clone());
+/// assert_eq!(dict.find_ref(["tea.leaf"]).unwrap(), &leaf);
+///
 /// let just_leaf = nest("", leaf.clone());
 /// assert_eq!(just_leaf, leaf);
 /// ```
-pub fn nest(key: &str, value: Value) -> Value {
-    fn value_from(mut keys: std::str::Split<'_, char>, value: Value) -> Value {
+pub fn nest(key: impl KeyPath, value: Value) -> Value {
+    fn value_from<I, S>(mut keys: I, value: Value) -> Value
+    where
+        I: Iterator<Item = S>,
+        S: AsRef<str>,
+    {
         match keys.next() {
-            Some(k) if !k.is_empty() => {
+            Some(k) if !k.as_ref().is_empty() => {
                 let mut dict = Dict::new();
-                dict.insert(k.into(), value_from(keys, value));
+                dict.insert(k.as_ref().into(), value_from(keys, value));
                 dict.into()
             }
             Some(_) | None => value
         }
     }
 
-    value_from(key.split('.'), value)
+    value_from(key.segments(), value)
 }
 
 #[doc(hidden)]

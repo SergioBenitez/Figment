@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 
 use serde::{ser, de};
 
-use crate::{Figment, Profile, Metadata, value::Tag};
+use crate::{Figment, Profile, Metadata, key::KeyPath, value::Tag};
 
 /// A simple alias to `Result` with an error type of [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
@@ -181,6 +181,18 @@ pub enum Kind {
 }
 
 impl Error {
+    pub(crate) fn missing_field<P: KeyPath + ?Sized>(path: &P) -> Self {
+        let path = path.segments()
+            .filter(|segment| !segment.as_ref().is_empty())
+            .map(|segment| segment.as_ref().to_owned())
+            .collect::<Vec<_>>();
+
+        let field = path.last().cloned().unwrap_or_default();
+        let mut error = Self::from(Kind::MissingField(field.into()));
+        error.path = path;
+        error
+    }
+
     pub(crate) fn prefixed(mut self, key: &str) -> Self {
         self.path.insert(0, key.into());
         self
@@ -223,7 +235,7 @@ impl Error {
         matches!(self.kind, Kind::MissingField(..))
     }
 
-    /// Append the string `path` to the error's path.
+    /// Appends `path` to the error's path.
     ///
     /// # Example
     ///
@@ -235,11 +247,14 @@ impl Error {
     ///
     /// let error = Error::from("an error message").with_path("some.path");
     /// assert_eq!(error.path, vec!["some", "path"]);
+    ///
+    /// let error = Error::from("an error message").with_path(["some.path"]);
+    /// assert_eq!(error.path, vec!["some.path"]);
     /// ```
-    pub fn with_path(mut self, path: &str) -> Self {
-        let paths = path.split('.')
-            .filter(|v| !v.is_empty())
-            .map(|v| v.to_string());
+    pub fn with_path(mut self, path: impl KeyPath) -> Self {
+        let paths = path.segments()
+            .filter(|v| !v.as_ref().is_empty())
+            .map(|v| v.as_ref().to_string());
 
         self.path.extend(paths);
         self

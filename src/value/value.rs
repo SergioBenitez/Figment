@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::num::{ParseFloatError, ParseIntError};
-use std::str::{FromStr, Split};
+use std::str::FromStr;
 
 use serde::Serialize;
 
+use crate::key::KeyPath;
 use crate::value::{Tag, ValueSerializer, magic::Either};
 use crate::error::{Error, Actual};
 
@@ -101,11 +102,11 @@ impl Value {
         T::deserialize(self)
     }
 
-    /// Looks up and returns the value at path `path`, where `path` is of the
-    /// form `a.b.c`. Each component is interpreted as a key when the current
-    /// value is a dictionary and as a `usize` index when it is an array. If the
-    /// key is empty, simply returns `self`. If the key is not empty and any
-    /// path component is invalid, returns `None`.
+    /// Looks up and returns the value at path `path`, where `path` is any type
+    /// that implements [`KeyPath`]. Each component is interpreted as a key when
+    /// the current value is a dictionary and as a `usize` index when it is an
+    /// array. If the path is empty, simply returns `self`. If the path is not
+    /// empty and any component is invalid, returns `None`.
     ///
     /// This method consumes `self`. See [`Value::find_ref()`] for a
     /// non-consuming variant.
@@ -142,19 +143,25 @@ impl Value {
     /// ]]);
     /// assert_eq!(pies.find("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
-    pub fn find(self, path: &str) -> Option<Value> {
-        fn find(mut keys: Split<char>, value: Value) -> Option<Value> {
+    pub fn find(self, path: impl KeyPath) -> Option<Value> {
+        fn find<I, S>(mut keys: I, value: Value) -> Option<Value>
+        where
+            I: Iterator<Item = S>,
+            S: AsRef<str>,
+        {
             match keys.next() {
-                Some(k) if !k.is_empty() => match value {
-                    Value::Dict(_, mut values) => find(keys, values.remove(k)?),
-                    Value::Array(_, values) => find(keys, values.into_iter().nth(k.parse().ok()?)?),
+                Some(k) if !k.as_ref().is_empty() => match value {
+                    Value::Dict(_, mut values) => find(keys, values.remove(k.as_ref())?),
+                    Value::Array(_, values) => {
+                        find(keys, values.into_iter().nth(k.as_ref().parse().ok()?)?)
+                    }
                     _ => None,
                 },
                 Some(_) | None => Some(value)
             }
         }
 
-        find(path.split('.'), self)
+        find(path.segments(), self)
     }
 
     /// Exactly like [`Value::find()`] but does not consume `self`,
@@ -192,19 +199,25 @@ impl Value {
     /// ]]);
     /// assert_eq!(pies.find_ref("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
-    pub fn find_ref<'a>(&'a self, path: &str) -> Option<&'a Value> {
-        fn find<'v>(mut keys: Split<char>, value: &'v Value) -> Option<&'v Value> {
+    pub fn find_ref<'a>(&'a self, path: impl KeyPath) -> Option<&'a Value> {
+        fn find<'v, I, S>(mut keys: I, value: &'v Value) -> Option<&'v Value>
+        where
+            I: Iterator<Item = S>,
+            S: AsRef<str>,
+        {
             match keys.next() {
-                Some(k) if !k.is_empty() => match value {
-                    Value::Dict(_, values) => find(keys, values.get(k)?),
-                    Value::Array(_, values) => find(keys, values.get(k.parse::<usize>().ok()?)?),
+                Some(k) if !k.as_ref().is_empty() => match value {
+                    Value::Dict(_, values) => find(keys, values.get(k.as_ref())?),
+                    Value::Array(_, values) => {
+                        find(keys, values.get(k.as_ref().parse::<usize>().ok()?)?)
+                    }
                     _ => None,
                 },
                 Some(_) | None => Some(value)
             }
         }
 
-        find(path.split('.'), self)
+        find(path.segments(), self)
     }
 
     /// Returns the [`Tag`] applied to this value.

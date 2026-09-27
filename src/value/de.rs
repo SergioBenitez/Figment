@@ -10,25 +10,21 @@ use serde::de::{SeqAccess, MapAccess, VariantAccess};
 
 use crate::Figment;
 use crate::error::{Error, Kind, Result};
+use crate::key::KeyPath;
 use crate::value::{Value, Num, Empty, Dict, Tag};
 
-pub(crate) struct MissingFieldDeserializer<'a>(pub &'a str);
+pub(crate) struct MissingFieldDeserializer<'a, P: KeyPath + ?Sized>(pub &'a P);
 
-impl MissingFieldDeserializer<'_> {
-    fn error(self) -> Error {
-        Kind::MissingField(self.0.to_string().into()).into()
-    }
-}
-
-impl<'de> Deserializer<'de> for MissingFieldDeserializer<'_> {
+impl<'de, P: KeyPath + ?Sized> Deserializer<'de> for MissingFieldDeserializer<'_, P> {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value> {
-        Err(self.error())
+        Err(Error::missing_field(self.0))
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        visitor.visit_none::<Error>().map_err(|_| self.error())
+        visitor.visit_none::<Error>()
+            .map_err(|_| Error::missing_field(self.0))
     }
 
     serde::forward_to_deserialize_any! {

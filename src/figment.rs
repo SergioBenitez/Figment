@@ -3,7 +3,8 @@ use std::panic::Location;
 use serde::de::Deserialize;
 
 use crate::{Profile, Provider, Metadata};
-use crate::error::{Kind, Result};
+use crate::error::{Error, Result};
+use crate::key::KeyPath;
 use crate::value::{Value, Map, Dict, Tag, Interpreter};
 use crate::value::{ConfiguredValueDe, DefaultInterpreter, LossyInterpreter};
 use crate::value::MissingFieldDeserializer;
@@ -79,9 +80,12 @@ use crate::coalesce::{Coalescible, Order};
 ///     for a given key path.
 ///
 /// A "key path" is a string of the form `a.b.c` (e.g, `item`, `item.fruits`,
-/// etc.) where each component delimited by a `.` is a key for the dictionary of
-/// the preceding key in the path, or the root dictionary if it is the first key
-/// in the path. See [`Value::find()`] for examples.
+/// etc.) or a collection of string components. In a string, components are
+/// delimited by `.`. In a collection, each item is one component, allowing keys
+/// containing `.` to be addressed. Each component is a key for the dictionary
+/// of the preceding key in the path, or the root dictionary if it is the first
+/// key in the path. See [`KeyPath`] for details and [`Value::find()`] for
+/// examples.
 ///
 /// ## Metadata
 ///
@@ -415,8 +419,11 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn focus(&self, key: &str) -> Self {
-        fn try_focus(figment: &Figment, key: &str) -> Result<Map<Profile, Dict>> {
+    pub fn focus(&self, key: impl KeyPath) -> Self {
+        fn try_focus<P: KeyPath + ?Sized>(
+            figment: &Figment,
+            key: &P
+        ) -> Result<Map<Profile, Dict>> {
             let map = figment.value.clone().map_err(|e| e.resolved(figment))?;
             let new_map = map.into_iter()
                 .filter_map(|(k, v)| {
@@ -432,7 +439,7 @@ impl Figment {
         Figment {
             profile: self.profile.clone(),
             metadata: self.metadata.clone(),
-            value: try_focus(self, key)
+            value: try_focus(self, &key)
         }
     }
 
@@ -543,13 +550,13 @@ impl Figment {
         T::deserialize(ConfiguredValueDe::<'_, LossyInterpreter>::from(self, &value))
     }
 
-    fn extract_inner_with<'a, T, I>(&self, path: &str) -> Result<T>
+    fn extract_inner_with<'a, T, I>(&self, path: impl KeyPath) -> Result<T>
         where T: Deserialize<'a>, I: Interpreter
     {
         let value = self.merged()?;
-        let value = match value.find(path) {
+        let value = match value.find(&path) {
             Some(value) => value,
-            None => return T::deserialize(MissingFieldDeserializer(path)),
+            None => return T::deserialize(MissingFieldDeserializer(&path)),
         };
 
         let de = ConfiguredValueDe::<'_, I>::from(self, &value);
@@ -586,7 +593,8 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn extract_inner<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
+    pub fn extract_inner<'a, T: Deserialize<'a>>(&self, path: impl KeyPath) -> Result<T>
+    {
         self.extract_inner_with::<T, DefaultInterpreter>(path)
     }
 
@@ -618,7 +626,8 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn extract_inner_lossy<'a, T: Deserialize<'a>>(&self, path: &str) -> Result<T> {
+    pub fn extract_inner_lossy<'a, T: Deserialize<'a>>(&self, path: impl KeyPath) -> Result<T>
+    {
         self.extract_inner_with::<T, LossyInterpreter>(path)
     }
 
@@ -754,10 +763,10 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn find_value(&self, path: &str) -> Result<Value> {
+    pub fn find_value(&self, path: impl KeyPath) -> Result<Value> {
         self.merged()?
-            .find(path)
-            .ok_or_else(|| Kind::MissingField(path.to_string().into()).into())
+            .find(&path)
+            .ok_or_else(|| Error::missing_field(&path))
     }
 
     /// Returns `true` if the combined figment evaluates successfully and
@@ -799,7 +808,7 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn contains(&self, path: &str) -> bool {
+    pub fn contains(&self, path: impl KeyPath) -> bool {
         self.merged().map_or(false, |v| v.find_ref(path).is_some())
     }
 
@@ -831,7 +840,7 @@ impl Figment {
     ///     Ok(())
     /// });
     /// ```
-    pub fn find_metadata(&self, key: &str) -> Option<&Metadata> {
+    pub fn find_metadata(&self, key: impl KeyPath) -> Option<&Metadata> {
         self.metadata.get(&self.find_value(key).ok()?.tag())
     }
 
@@ -899,6 +908,7 @@ fn is_send_sync() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Kind;
     use crate::providers::Serialized;
     use crate::value::Empty;
 

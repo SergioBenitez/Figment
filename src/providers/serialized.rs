@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::{Profile, Provider, Metadata};
 use crate::error::{Error, Kind::InvalidType};
+use crate::key::KeyPath;
 use crate::value::{Value, Map, Dict};
 
 /// A `Provider` that sources values directly from a serialize type.
@@ -29,16 +30,17 @@ use crate::value::{Value, Map, Dict};
 ///     When keyed ([`Serialized::default()`], [`Serialized::global()`],
 ///     [`Serialized::key()`]), `T` can serialize to any [`Value`] and is
 ///     emitted as the value of the configured `key` key path. Nested
-///     dictionaries are created for every path component delimited by `.` in
-///     the `key` string, each dictionary mapping the path component to the
-///     child, with the leaf mapping to the serialized `T`. For instance,
-///     `a.b.c` results in `{ a: { b: { c: T }}}`.
+///     dictionaries are created for every path component, each dictionary
+///     mapping the path component to the child, with the leaf mapping to the
+///     serialized `T`. String paths delimit components with `.`; collections
+///     yield exact components. For instance, `a.b.c` results in
+///     `{ a: { b: { c: T }}}` while `["a.b.c"]` results in `{ "a.b.c": T }`.
 #[derive(Debug, Clone)]
 pub struct Serialized<T> {
     /// The value to be serialized and used as the provided data.
     pub value: T,
-    /// The key path (`a.b.c`) to emit the value to or the root if `None`.
-    pub key: Option<String>,
+    /// The key path to emit the value to or the root if `None`.
+    pub key: Option<Vec<String>>,
     /// The profile to emit the value to. Defaults to [`Profile::Default`].
     pub profile: Profile,
     loc: &'static Location<'static>,
@@ -114,7 +116,7 @@ impl<T> Serialized<T> {
     ///
     /// See [`Serialized::from()`] and [`Serialized::key()`].
     #[track_caller]
-    pub fn default(key: &str, value: T) -> Serialized<T> {
+    pub fn default(key: impl KeyPath, value: T) -> Serialized<T> {
         Self::from(value, Profile::Default).key(key)
     }
 
@@ -127,7 +129,7 @@ impl<T> Serialized<T> {
     ///
     /// See [`Serialized::from()`] and [`Serialized::key()`].
     #[track_caller]
-    pub fn global(key: &str, value: T) -> Serialized<T> {
+    pub fn global(key: impl KeyPath, value: T) -> Serialized<T> {
         Self::from(value, Profile::Global).key(key)
     }
 
@@ -178,8 +180,11 @@ impl<T> Serialized<T> {
     ///     Ok(())
     /// });
     /// ```
-    pub fn key(mut self, key: &str) -> Self {
-        self.key = Some(key.into());
+    pub fn key(mut self, key: impl KeyPath) -> Self {
+        self.key = Some(key.segments()
+            .map(|segment| segment.as_ref().to_owned())
+            .collect());
+
         self
     }
 }

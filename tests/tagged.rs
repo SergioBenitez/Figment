@@ -46,7 +46,7 @@ fn check_errors_are_tagged_with_path() {
         assert_eq!(err.path, vec!["foo", "bar"]);
 
         let err = figment.extract_inner::<usize>("foo.bar.baz").unwrap_err();
-        assert!(err.path.is_empty());
+        assert_eq!(err.path, vec!["foo", "bar", "baz"]);
         Ok(())
     });
 }
