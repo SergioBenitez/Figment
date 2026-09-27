@@ -199,8 +199,8 @@ impl Value {
     /// ]]);
     /// assert_eq!(pies.find_ref("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
-    pub fn find_ref<'a>(&'a self, path: impl KeyPath) -> Option<&'a Value> {
-        fn find<'v, I, S>(mut keys: I, value: &'v Value) -> Option<&'v Value>
+    pub fn find_ref(&self, path: impl KeyPath) -> Option<&Value> {
+        fn find<I, S>(mut keys: I, value: &Value) -> Option<&Value>
         where
             I: Iterator<Item = S>,
             S: AsRef<str>,

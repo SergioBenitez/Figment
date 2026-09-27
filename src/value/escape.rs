@@ -45,7 +45,7 @@ pub fn escape(string: &str) -> Result<Cow<'_, str>, Error> {
                     None => return Err(Error::UnterminatedString(0)),
                 }
             },
-            ch if ch == '\u{09}' || ('\u{20}' <= ch && ch <= '\u{10ffff}' && ch != '\u{7f}') => {
+            ch if ch == '\u{09}' || (('\u{20}'..='\u{10ffff}').contains(&ch) && ch != '\u{7f}') => {
                 // if we haven't allocated, the string contains the value
                 if let Cow::Owned(ref mut val) = output {
                     val.push(ch);

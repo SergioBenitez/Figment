@@ -133,7 +133,9 @@ impl<'a> Parser<'a> {
     fn dict(&mut self) -> Result<Dict> {
         self.delimited('{', '}', |parser| {
             let key = parser.key()?;
-            (parser.skip_whitespace(), parser.eat('=')?, parser.skip_whitespace());
+            parser.skip_whitespace();
+            parser.eat('=')?;
+            parser.skip_whitespace();
             let value = parser.value()?;
             Ok((key.to_string(), value))
         })

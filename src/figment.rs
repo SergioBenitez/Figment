@@ -809,7 +809,7 @@ impl Figment {
     /// });
     /// ```
     pub fn contains(&self, path: impl KeyPath) -> bool {
-        self.merged().map_or(false, |v| v.find_ref(path).is_some())
+        matches!(self.merged(), Ok(v) if v.find_ref(path).is_some())
     }
 
     /// Finds the metadata for the value at `key` path. See [`Value::find()`]

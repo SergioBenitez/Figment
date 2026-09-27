@@ -1,5 +1,6 @@
 //! [`Value`] and friends: types representing valid configuration values.
 //!
+#[allow(clippy::module_inception)]
 mod value;
 mod ser;
 mod de;

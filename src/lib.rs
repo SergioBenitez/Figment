@@ -178,7 +178,7 @@
 //!     and converts it into a provider-native key.
 //!   * A [`Source`] specifying where the value was sourced from.
 //!   * A code source [`Location`] where the value's provider was added to a
-//!   [`Figment`].
+//!     [`Figment`].
 //!
 //! Along with the information in an [`Error`], this means figment can produce
 //! rich error values and messages:

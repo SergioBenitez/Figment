@@ -346,7 +346,7 @@ impl<F: Format> Data<F> {
         loop {
             let file_path = cwd.join(path);
             if file_path.is_file() {
-                return Some(file_path.into());
+                return Some(file_path);
             }
 
             cwd = cwd.parent()?;
@@ -405,7 +405,7 @@ impl<F: Format> Provider for Data<F> {
 /// # impl Format for T {
 /// #     type Error = serde::de::value::Error;
 /// #     const NAME: &'static str = "T";
-/// #     fn from_str<'de, T: DeserializeOwned>(_: &'de str) -> Result<T, Self::Error> { todo!() }
+/// #     fn from_str<T: DeserializeOwned>(_: &str) -> Result<T, Self::Error> { todo!() }
 /// # }
 /// # fn is_provider<T: figment::Provider>(_: T) {}
 /// // If `T` implements `Format`, `T` is a `Provider`.
@@ -470,7 +470,7 @@ pub trait Format: Sized {
     /// intended to be called directly. Instead, it is intended to be
     /// _implemented_ and then used indirectly via the [`Data::file()`] or
     /// [`Data::string()`] methods.
-    fn from_str<'de, T: DeserializeOwned>(string: &'de str) -> Result<T, Self::Error>;
+    fn from_str<T: DeserializeOwned>(string: &str) -> Result<T, Self::Error>;
 
     /// Parses the file at `path` as the data format `Self` as a `T` or returns
     /// an error if the `string` is an invalid `T`. The default implementation
@@ -498,7 +498,7 @@ macro_rules! impl_format {
 
             const NAME: &'static str = $NAME;
 
-            fn from_str<'de, T: DeserializeOwned>(s: &'de str) -> Result<T, $E> {
+            fn from_str<T: DeserializeOwned>(s: &str) -> Result<T, $E> {
                 $func(s)
             }
         }
@@ -603,7 +603,8 @@ impl YamlExtended {
     ///     Ok(())
     /// });
     /// ```
-    pub fn from_str<'de, T: DeserializeOwned>(s: &'de str) -> serde_yaml::Result<T> {
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str<T: DeserializeOwned>(s: &str) -> serde_yaml::Result<T> {
         let mut value: serde_yaml::Value = serde_yaml::from_str(s)?;
         value.apply_merge()?;
         T::deserialize(value)

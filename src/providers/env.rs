@@ -137,8 +137,8 @@ impl Env {
         }
     }
 
-    fn chain<F: Clone + 'static>(self, f: F) -> Self
-        where F: for<'a> Fn(Option<Uncased<'a>>) -> Option<Uncased<'a>>
+    fn chain<F>(self, f: F) -> Self
+        where F: Clone + 'static + for<'a> Fn(Option<Uncased<'a>>) -> Option<Uncased<'a>>
     {
         let filter_map = self.filter_map;
         Env {
@@ -323,8 +323,8 @@ impl Env {
     ///     Ok(())
     /// });
     /// ```
-    pub fn filter<F: Clone + 'static>(self, filter: F) -> Self
-        where F: Fn(&UncasedStr) -> bool
+    pub fn filter<F>(self, filter: F) -> Self
+        where F: Clone + 'static + Fn(&UncasedStr) -> bool
     {
         self.chain(move |prev| prev.filter(|v| filter(v)))
     }
@@ -380,8 +380,8 @@ impl Env {
     ///     Ok(())
     /// });
     /// ```
-    pub fn map<F: Clone + 'static>(self, mapper: F) -> Self
-        where F: Fn(&UncasedStr) -> Uncased<'_>
+    pub fn map<F>(self, mapper: F) -> Self
+        where F: Clone + 'static + Fn(&UncasedStr) -> Uncased<'_>
     {
         self.chain(move |prev| prev.map(|v| mapper(&v).into_owned()))
     }
@@ -425,8 +425,8 @@ impl Env {
     ///     Ok(())
     /// });
     /// ```
-    pub fn filter_map<F: Clone + 'static>(self, f: F) -> Self
-        where F: Fn(&UncasedStr) -> Option<Uncased<'_>>
+    pub fn filter_map<F>(self, f: F) -> Self
+        where F: Clone + 'static + Fn(&UncasedStr) -> Option<Uncased<'_>>
     {
         self.chain(move |prev| prev.and_then(|v| f(&v).map(|v| v.into_owned())))
     }

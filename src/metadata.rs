@@ -16,7 +16,7 @@ use crate::Profile;
 ///   * The [`Source`] itself, if it is known.
 ///   * A default or custom [interpolater](#interpolation).
 ///   * A source [`Location`] where a value's provider was added to the
-///   containing figment, if it is known.
+///     containing figment, if it is known.
 ///
 /// This information is used to produce insightful error messages as well as to
 /// generate values like [`RelativePathBuf`] that know about their configuration
@@ -154,8 +154,8 @@ impl Metadata {
     /// assert_eq!(interpolated, "KEY.PATH");
     /// ```
     #[inline(always)]
-    pub fn interpolater<I: Clone + Send + Sync + 'static>(mut self, f: I) -> Self
-        where I: Fn(&Profile, &[&str]) -> String
+    pub fn interpolater<I>(mut self, f: I) -> Self
+        where I: Clone + Send + Sync + 'static + Fn(&Profile, &[&str]) -> String
     {
         self.interpolater = Box::new(f);
         self
