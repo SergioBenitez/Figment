@@ -3,6 +3,7 @@
 use std::fmt::{self, Display};
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 
 use serde::{ser, de};
 
@@ -141,10 +142,14 @@ impl fmt::Debug for Error {
 }
 
 /// An error kind, encapsulating serde's [`serde::de::Error`].
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     /// A custom error message.
     Message(String),
+
+    /// A required file could not be found: (requested path).
+    FileNotFound(PathBuf),
 
     /// An invalid type: (actual, expected). See
     /// [`serde::de::Error::invalid_type()`].
@@ -496,6 +501,9 @@ impl Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Kind::Message(msg) => f.write_str(msg),
+            Kind::FileNotFound(path) => {
+                write!(f, "required file `{}` not found", path.display())
+            }
             Kind::InvalidType(v, exp) => {
                 write!(f, "invalid type: found {}, expected {}", v, exp)
             }

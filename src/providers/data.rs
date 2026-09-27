@@ -46,9 +46,9 @@ use crate::error::Kind;
 ///     When nesting is _not_ specified, the source file or string is read and
 ///     parsed, and the parsed dictionary is emitted into the profile
 ///     configurable via [`Data::profile()`], which defaults to
-///     [`Profile::Default`]. If the source is a file path and the file is not
-///     present, an empty dictionary is emitted unless [`Data::required()`] is
-///     set to `true` in which case the provider fails.
+///     [`Profile::Default`]. If the source is a file path, the file is required
+///     to exist when [`Data::required()`] is `true`. Otherwise, if it is
+///     `false` and the file is not present, an empty dictionary is emitted.
 ///
 ///   * **Data (Nested)**
 ///
@@ -214,16 +214,19 @@ impl<F: Format> Data<F> {
     /// Sets whether the source file is required to be present. The default is
     /// `false`.
     ///
-    /// When `false`, a non-existent file is treated as an empty source, that
-    /// is, it deserializes to an empty dictionary. When `true`, a non-existent
-    /// file causes an error. If the source is a string, this setting has no
-    /// effect.
+    /// When `false`, a file that cannot be found is treated as an empty source,
+    /// that is, it deserializes to an empty dictionary. When `true`, a
+    /// non-existent file causes an error of [`Kind::FileNotFound`]. If the
+    /// source is a string, this setting has no effect.
+    ///
+    /// A file is found when the path resolves to a regular file, including in a
+    /// parent directory when [`Data::search()`] is enabled.
     ///
     /// # Example
     ///
     /// ```rust
     /// use serde::Deserialize;
-    /// use figment::{Figment, Jail, providers::{Format, Toml}};
+    /// use figment::{Figment, Jail, providers::{Format, Toml}, error::Kind};
     ///
     /// #[derive(Debug, PartialEq, Deserialize)]
     /// struct Config {
@@ -242,8 +245,15 @@ impl<F: Format> Data<F> {
     ///
     ///     // Set `required` to true to disallow missing files.
     ///     let source = Toml::file("missing.toml");
-    ///     let config = Figment::from(source.required(true)).extract::<Config>();
-    ///     assert!(config.is_err());
+    ///     let figment = Figment::from(source.required(true));
+    ///     let config = figment.extract::<Config>();
+    ///     assert_eq!(config.unwrap_err().kind, Kind::FileNotFound("missing.toml".into()));
+    ///     # let e = figment.merge(("v", 123)).extract_inner::<Option<usize>>("v").unwrap_err();
+    ///     # assert_eq!(e.kind, Kind::FileNotFound("missing.toml".into()));
+    ///     # assert!(!e.missing());
+    ///     # assert_eq!(e.kind.to_string(), "required file `missing.toml` not found");
+    ///     # let source = e.metadata.as_ref().unwrap().source.as_ref().unwrap();
+    ///     # assert_eq!(source.file_path(), Some(std::path::Path::new("missing.toml")));
     ///
     ///     // Set `required` to false to explicitly allow missing files.
     ///     # let source = Toml::file("missing.toml").required(true);
@@ -251,7 +261,8 @@ impl<F: Format> Data<F> {
     ///     assert_eq!(config.foo, 0);
     ///
     ///     // The setting has no effect when the file is present.
-    ///     let config = Figment::from(Toml::file("config.toml")).extract::<Config>()?;
+    ///     let source = Toml::file("config.toml").required(true);
+    ///     let config = Figment::from(source).extract::<Config>()?;
     ///     assert_eq!(config.foo, 123);
     ///
     ///     Ok(())
@@ -376,10 +387,7 @@ impl<F: Format> Provider for Data<F> {
                         None => F::from_path(&path),
                     },
                     None if !required => Ok(Map::new()),
-                    None => {
-                        let msg = format!("required file `{}` not found", path.display());
-                        return Err(Kind::Message(msg).into());
-                    }
+                    None => return Err(Kind::FileNotFound(path.clone()).into()),
                 }
             },
             (S::String(s), None) => F::from_str(s),
