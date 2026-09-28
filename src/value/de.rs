@@ -76,29 +76,29 @@ impl<'c, I: Interpreter> ConfiguredValueDe<'c, I> {
 }
 
 /// Like [`serde::forward_to_deserialize_any`] but applies `$apply` to
-/// `&self` first, then calls `deserialize_any()` on the returned value, and
-/// finally maps any error produced using `$errmap`:
-///   - $apply(&self).deserialize_any(visitor).map_err($errmap)
+/// `&self` first, then calls `deserialize_any()` on the returned value:
+///   - $apply(&self).deserialize_any(visitor)
 macro_rules! apply_then_forward_to_deserialize_any {
-    ( $( $($f:ident),+ => |$this:pat| $apply:expr, $errmap:expr),* $(,)? ) => {
+    ( $( $($f:ident),+ => |$this:pat| $apply:expr),* $(,)? ) => {
         $(
             $(
                 fn $f<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
                     let $this = &self;
-                    $apply.deserialize_any(visitor).map_err($errmap)
+                    $apply.deserialize_any(visitor)
                 }
             )+
         )*
     }
 }
 
+// Extraction and map/sequence access attach error context at input boundaries.
 impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I> {
     type Error = Error;
 
     fn deserialize_any<V>(self, v: V) -> Result<V::Value>
         where V: de::Visitor<'de>
     {
-        let result = match *self.value {
+        match *self.value {
             Value::String(_, ref s) => v.visit_str(s),
             Value::Char(_, c) => v.visit_char(c),
             Value::Bool(_, b) => v.visit_bool(b),
@@ -106,21 +106,16 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
             Value::Empty(_, e) => e.deserialize_any(v),
             Value::Dict(_, ref map) => v.visit_map(MapDe::<Self>::new(map, self.config)),
             Value::Array(_, ref seq) => v.visit_seq(SeqDe::<Self>::new(seq, self.config)),
-        };
-
-        result.map_err(|e| e.retagged(self.value.tag()).resolved(self.config))
+        }
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
         where V: Visitor<'de>
     {
-        let (config, tag) = (self.config, self.value.tag());
-        let result = match self.value {
+        match self.value {
             Value::Empty(_, val) => val.deserialize_any(visitor),
             _ => visitor.visit_some(self)
-        };
-
-        result.map_err(|e| e.retagged(tag).resolved(config))
+        }
     }
 
     fn deserialize_struct<V: Visitor<'de>>(
@@ -131,16 +126,13 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
     ) -> Result<V::Value> {
         use crate::value::magic::*;
 
-        let (config, tag) = (self.config, self.value.tag());
-        let result = match name {
+        match name {
             Value::NAME => Value::deserialize_from(self, visitor),
             RelativePathBuf::NAME => RelativePathBuf::deserialize_from(self, visitor),
             Tagged::<()>::NAME => Tagged::<()>::deserialize_from(self, visitor),
             // SelectedProfile::NAME => SelectedProfile::deserialize_from(self, visitor),
             _ => self.deserialize_any(visitor)
-        };
-
-        result.map_err(|e| e.retagged(tag).resolved(config))
+        }
     }
 
     fn deserialize_enum<V: Visitor<'de>>(
@@ -151,8 +143,7 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
     ) -> Result<V::Value> {
         use serde::de::value::MapAccessDeserializer;
 
-        let (config, tag) = (self.config, self.value.tag());
-        let result = match self.value {
+        match self.value {
             Value::String(_, s) => v.visit_enum((&**s).into_deserializer()),
             Value::Dict(_, ref map) => {
                 let map_access = MapDe::<Self>::new(map, self.config);
@@ -163,9 +154,7 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
                 v.visit_enum(tag.into_deserializer())
             }
             _ => self.deserialize_any(v)
-        };
-
-        result.map_err(|e| e.retagged(tag).resolved(config))
+        }
     }
 
     fn deserialize_newtype_struct<V: Visitor<'de>>(
@@ -185,12 +174,10 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
     apply_then_forward_to_deserialize_any! {
         deserialize_bool =>
             |de| I::interpret_as_bool(de.value),
-            |e| e.retagged(de.value.tag()).resolved(de.config),
         deserialize_u8, deserialize_u16, deserialize_u32, deserialize_u64,
         deserialize_i8, deserialize_i16, deserialize_i32, deserialize_i64,
         deserialize_f32, deserialize_f64 =>
             |de| I::interpret_as_num(de.value),
-            |e| e.retagged(de.value.tag()).resolved(de.config),
     }
 
     serde::forward_to_deserialize_any! {
@@ -246,7 +233,7 @@ impl<'v: 'f, 'f, 'de, D> de::MapAccess<'de> for MapDe<'v, 'f, D>
     {
         if let Some((k, v)) = self.iter.next() {
             let result = seed.deserialize(k.as_str().into_deserializer())
-                .map_err(|e: Error| e.prefixed(k).retagged(v.tag()))
+                .map_err(|e: Error| e.at(v).prefixed([k]))
                 .map(Some);
 
             self.pair = Some((k, v));
@@ -260,9 +247,8 @@ impl<'v: 'f, 'f, 'de, D> de::MapAccess<'de> for MapDe<'v, 'f, D>
         where V: de::DeserializeSeed<'de>
     {
         let (key, value) = self.pair.take().expect("visit_value called before visit_key");
-        let tag = value.tag();
         seed.deserialize(D::make_deserializer(value, self.args))
-            .map_err(|e: Error| e.prefixed(key).retagged(tag))
+            .map_err(|e: Error| e.at(value).prefixed([key]))
     }
 }
 
@@ -287,10 +273,9 @@ impl<'v: 'f, 'f, 'de, D> de::SeqAccess<'de> for SeqDe<'v, 'f, D>
         where T: de::DeserializeSeed<'de>
     {
         if let Some((i, value)) = self.iter.next() {
-            // item.map_tag(|metadata| metadata.path.push(self.count.to_string()));
             self.len -= 1;
             seed.deserialize(D::make_deserializer(value, self.args))
-                .map_err(|e: Error| e.prefixed(&i.to_string()))
+                .map_err(|e: Error| e.at(value).prefixed([i.to_string()]))
                 .map(Some)
         } else {
             Ok(None)
@@ -319,17 +304,18 @@ impl<'de> Deserializer<'de> for &Value {
             Array(_, ref seq) => v.visit_seq(SeqDe::<&Value>::new(seq, ())),
         };
 
-        result.map_err(|e: Error| e.retagged(self.tag()))
+        result.map_err(|e: Error| e.at(self))
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
         where V: Visitor<'de>
     {
-        if let Value::Empty(t, val) = self {
-            return val.deserialize_any(visitor).map_err(|e: Error| e.retagged(*t));
-        }
+        let result = match self {
+            Value::Empty(_, val) => val.deserialize_any(visitor),
+            _ => visitor.visit_some(self),
+        };
 
-        visitor.visit_some(self)
+        result.map_err(|e: Error| e.at(self))
     }
 
     fn deserialize_enum<V: Visitor<'de>>(
@@ -353,7 +339,7 @@ impl<'de> Deserializer<'de> for &Value {
             _ => self.deserialize_any(v)
         };
 
-        result.map_err(|e: Error| e.retagged(self.tag()))
+        result.map_err(|e: Error| e.at(self))
     }
 
     fn deserialize_newtype_struct<V: Visitor<'de>>(
@@ -361,7 +347,7 @@ impl<'de> Deserializer<'de> for &Value {
         _name: &'static str,
         visitor: V,
     ) -> Result<V::Value> {
-        visitor.visit_newtype_struct(self)
+        visitor.visit_newtype_struct(self).map_err(|e: Error| e.at(self))
     }
 
     serde::forward_to_deserialize_any! {
