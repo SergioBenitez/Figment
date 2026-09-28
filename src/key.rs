@@ -17,6 +17,9 @@
 ///
 ///     * `"a.b"` maps to the components `"a"` and `"b"`.
 ///     * `"a.b.c"` maps to `"a"`, `"b"`, and `"c"`.
+///     * `"a..b"` maps to `"a"`, `""`, and `"b"`.
+///     * `".a."` maps to `""`, `"a"`, and `""`.
+///     * `""` consists of zero components.
 ///     * `"a.b\.c"` maps to `"a"`, `"b\"`, and `"c"`; `\` does not escape `.`.
 ///
 ///   * **`[S]`, `[S; N]`, and `Vec<S>` where `S: AsRef<str>`**
@@ -24,6 +27,7 @@
 ///     Each item of the array is one component.
 ///
 ///     * `["a.b", "c"]` consists of the components `"a.b"` and `"c"`.
+///     * `[""]` consists of one empty component.
 ///     * `[]` consists of zero components.
 ///
 ///   * **Any cloneable iterator whose items implement `AsRef<str>`**
@@ -117,7 +121,12 @@ impl KeyPath for str {
     type Segments<'a> = std::str::Split<'a, char> where Self: 'a;
 
     fn segments(&self) -> Self::Segments<'_> {
-        self.split('.')
+        let mut segments = self.split('.');
+        if self.is_empty() {
+            segments.next();
+        }
+
+        segments
     }
 }
 
@@ -126,7 +135,7 @@ impl KeyPath for String {
     type Segments<'a> = std::str::Split<'a, char> where Self: 'a;
 
     fn segments(&self) -> Self::Segments<'_> {
-        self.split('.')
+        str::segments(self)
     }
 }
 
@@ -135,7 +144,7 @@ impl KeyPath for std::borrow::Cow<'_, str> {
     type Segments<'a> = std::str::Split<'a, char> where Self: 'a;
 
     fn segments(&self) -> Self::Segments<'_> {
-        self.split('.')
+        str::segments(self)
     }
 }
 

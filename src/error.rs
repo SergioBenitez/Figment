@@ -188,7 +188,6 @@ pub enum Kind {
 impl Error {
     pub(crate) fn missing_field<P: KeyPath + ?Sized>(path: &P) -> Self {
         let path = path.segments()
-            .filter(|segment| !segment.as_ref().is_empty())
             .map(|segment| segment.as_ref().to_owned())
             .collect::<Vec<_>>();
 
@@ -257,11 +256,7 @@ impl Error {
     /// assert_eq!(error.path, vec!["some.path"]);
     /// ```
     pub fn with_path(mut self, path: impl KeyPath) -> Self {
-        let paths = path.segments()
-            .filter(|v| !v.as_ref().is_empty())
-            .map(|v| v.as_ref().to_string());
-
-        self.path.extend(paths);
+        self.path.extend(path.segments().map(|v| v.as_ref().to_owned()));
         self
     }
 

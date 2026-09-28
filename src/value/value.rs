@@ -102,8 +102,8 @@ impl Value {
     /// Looks up and returns the value at path `path`, where `path` is any type
     /// that implements [`KeyPath`]. Each component is interpreted as a key when
     /// the current value is a dictionary and as a `usize` index when it is an
-    /// array. If the path is empty, simply returns `self`. If the path is not
-    /// empty and any component is invalid, returns `None`.
+    /// array. If the path has no components, simply returns `self`. If any
+    /// component is invalid, returns `None`.
     ///
     /// This method consumes `self`. See [`Value::find_ref()`] for a
     /// non-consuming variant.
@@ -141,24 +141,16 @@ impl Value {
     /// assert_eq!(pies.find("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
     pub fn find(self, path: impl KeyPath) -> Option<Value> {
-        fn find<I, S>(mut keys: I, value: Value) -> Option<Value>
-        where
-            I: Iterator<Item = S>,
-            S: AsRef<str>,
-        {
-            match keys.next() {
-                Some(k) if !k.as_ref().is_empty() => match value {
-                    Value::Dict(_, mut values) => find(keys, values.remove(k.as_ref())?),
-                    Value::Array(_, values) => {
-                        find(keys, values.into_iter().nth(k.as_ref().parse().ok()?)?)
-                    }
-                    _ => None,
-                },
-                Some(_) | None => Some(value)
-            }
+        let mut value = self;
+        for key in path.segments() {
+            value = match value {
+                Value::Dict(_, mut values) => values.remove(key.as_ref())?,
+                Value::Array(_, values) => values.into_iter().nth(key.as_ref().parse().ok()?)?,
+                _ => return None,
+            };
         }
 
-        find(path.segments(), self)
+        Some(value)
     }
 
     /// Exactly like [`Value::find()`] but does not consume `self`,
@@ -197,24 +189,16 @@ impl Value {
     /// assert_eq!(pies.find_ref("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
     pub fn find_ref(&self, path: impl KeyPath) -> Option<&Value> {
-        fn find<I, S>(mut keys: I, value: &Value) -> Option<&Value>
-        where
-            I: Iterator<Item = S>,
-            S: AsRef<str>,
-        {
-            match keys.next() {
-                Some(k) if !k.as_ref().is_empty() => match value {
-                    Value::Dict(_, values) => find(keys, values.get(k.as_ref())?),
-                    Value::Array(_, values) => {
-                        find(keys, values.get(k.as_ref().parse::<usize>().ok()?)?)
-                    }
-                    _ => None,
-                },
-                Some(_) | None => Some(value)
-            }
+        let mut value = self;
+        for key in path.segments() {
+            value = match value {
+                Value::Dict(_, values) => values.get(key.as_ref())?,
+                Value::Array(_, values) => values.get(key.as_ref().parse::<usize>().ok()?)?,
+                _ => return None,
+            };
         }
 
-        find(path.segments(), self)
+        Some(value)
     }
 
     /// Returns the [`Tag`] applied to this value.

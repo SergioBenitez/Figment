@@ -266,7 +266,7 @@ use crate::value::{Value, Dict};
 /// `b` -> `c` -> `value` for `a.b.c`). See [`KeyPath`] for supported key path
 /// types.
 ///
-/// If `key` is empty, simply returns `value`. Otherwise, `Value` will be a
+/// If `key` has no components, simply returns `value`. Otherwise, `Value` will be a
 /// dictionary with the nested mappings.
 ///
 /// # Example
@@ -298,12 +298,12 @@ pub fn nest(key: impl KeyPath, value: Value) -> Value {
         S: AsRef<str>,
     {
         match keys.next() {
-            Some(k) if !k.as_ref().is_empty() => {
+            Some(k) => {
                 let mut dict = Dict::new();
                 dict.insert(k.as_ref(), value_from(keys, value));
                 dict.into()
             }
-            Some(_) | None => value
+            None => value
         }
     }
 
