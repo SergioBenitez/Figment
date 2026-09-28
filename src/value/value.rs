@@ -5,14 +5,11 @@ use std::str::FromStr;
 use serde::Serialize;
 
 use crate::key::KeyPath;
-use crate::value::{Tag, ValueSerializer, magic::Either};
+use crate::value::{Tag, Dict, ValueSerializer, magic::Either};
 use crate::error::{Error, Actual};
 
-/// An alias to the type of map used in [`Value::Dict`].
+/// An alias to a key-sorted map.
 pub type Map<K, V> = BTreeMap<K, V>;
-
-/// An alias to a [`Map`] from `String` to [`Value`]s.
-pub type Dict = Map<String, Value>;
 
 /// An enum representing all possible figment value variants.
 ///
@@ -600,7 +597,7 @@ impl_from_for_value! {
     String: String, char: Char, bool: Bool,
     u8: Num, u16: Num, u32: Num, u64: Num, u128: Num, usize: Num,
     i8: Num, i16: Num, i32: Num, i64: Num, i128: Num, isize: Num,
-    f32: Num, f64: Num, Num: Num, Empty: Empty
+    f32: Num, f64: Num, Num: Num, Empty: Empty, Dict: Dict
 }
 
 /// A signed or unsigned numeric value.

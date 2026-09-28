@@ -499,7 +499,7 @@ impl Env {
     ///
     /// ```rust
     /// use serde::Deserialize;
-    /// use figment::{Figment, Jail, util::map, value::Dict, providers::Env};
+    /// use figment::{Figment, Jail, util::dict, value::Dict, providers::Env};
     ///
     /// #[derive(Debug, PartialEq, Deserialize)]
     /// struct Foo {
@@ -520,7 +520,7 @@ impl Env {
     ///     let config: Config = Figment::from(Env::prefixed("APP_")).extract()?;
     ///     assert_eq!(config, Config {
     ///         foo: Foo { key: 10 },
-    ///         map: map!["one".into() => 1u8.into(), "two".into() => 2.0.into()],
+    ///         map: dict!["one" => 1u8, "two" => 2.0],
     ///     });
     ///
     ///     // With splitting.
@@ -534,7 +534,7 @@ impl Env {
     ///
     ///     assert_eq!(config, Config {
     ///         foo: Foo { key: 20 },
-    ///         map: map!["one".into() => 1.0.into(), "two".into() => "dos".into()],
+    ///         map: dict!["one" => 1.0, "two" => "dos"],
     ///     });
     ///
     ///     Ok(())

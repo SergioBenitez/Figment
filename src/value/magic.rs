@@ -283,14 +283,14 @@ impl Magic for RelativePathBuf {
                 .and_then(|s| s.file_path())
                 .map(|path| path.display().to_string()));
 
-        let mut map = crate::value::Map::new();
+        let mut map = crate::value::Dict::new();
         if let Some(path) = metadata_path {
-            map.insert(Self::FIELDS[0].into(), path.into());
+            map.insert(Self::FIELDS[0], path);
         }
 
         // If we have this struct with no metadata_path, still use the value.
         let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(de.value);
-        map.insert(Self::FIELDS[1].into(), value.clone());
+        map.insert(Self::FIELDS[1], value.clone());
         visitor.visit_map(MapDe::<ConfiguredValueDe<I>>::new(&map, config))
     }
 }
@@ -664,7 +664,7 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
         visitor: V
     ) -> Result<V::Value, Error>{
         let config = de.config;
-        let mut map = crate::value::Map::new();
+        let mut map = crate::value::Dict::new();
 
         // If we have this struct with a non-default tag, use it.
         if let Some(dict) = de.value.as_dict() {
@@ -677,8 +677,8 @@ impl<T: for<'de> Deserialize<'de>> Magic for Tagged<T> {
 
         // If we have this struct with default tag, use the value.
         let value = de.value.find_ref(Self::FIELDS[1]).unwrap_or(de.value);
-        map.insert(Self::FIELDS[0].into(), de.value.tag().into());
-        map.insert(Self::FIELDS[1].into(), value.clone());
+        map.insert(Self::FIELDS[0], de.value.tag());
+        map.insert(Self::FIELDS[1], value.clone());
         visitor.visit_map(MapDe::<ConfiguredValueDe<I>>::new(&map, config))
     }
 }

@@ -199,10 +199,10 @@ impl Profile {
     /// # Example
     ///
     /// ```rust
-    /// use figment::{Profile, util::map};
+    /// use figment::{Profile, util::dict};
     ///
     /// let profile = Profile::new("static");
-    /// let map = profile.collect(map!["hi".into() => 123.into()]);
+    /// let map = profile.collect(dict!["hi" => 123]);
     /// ```
     pub fn collect(&self, dict: Dict) -> Map<Profile, Dict> {
         let mut map = Map::new();

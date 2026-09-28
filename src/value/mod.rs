@@ -8,10 +8,12 @@ mod tag;
 mod parse;
 mod escape;
 
+pub mod dict;
 pub mod magic;
 
 pub(crate) use {self::ser::*, self::de::*};
 
 pub use tag::Tag;
-pub use value::{Value, Map, Num, Dict, Empty};
+pub use dict::Dict;
+pub use value::{Value, Map, Num, Empty};
 pub use uncased::{Uncased, UncasedStr};

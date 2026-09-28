@@ -67,6 +67,17 @@ use crate::coalesce::{Coalescible, Order};
 ///
 /// For examples, refer to each strategy's documentation.
 ///
+/// ## Key Ordering
+///
+/// The order of keys in each dictionary depends on whether the
+/// `preserve_order` feature is enabled.
+///
+/// - `preserve_order` **enabled**: keys appear in the order supplied by
+///   providers; this is typically source-order. Joining or merging preserves
+///   the positions of existing keys and appends new keys in the order provided.
+///
+/// - `preserve_order` **disabled**: keys appear in lexicographic order.
+///
 /// ## Extraction
 ///
 /// The configuration or a subset thereof can be extracted from a `Figment` in

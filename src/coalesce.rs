@@ -1,5 +1,5 @@
 use crate::Profile;
-use crate::value::{Value, Map};
+use crate::value::{Value, Map, Dict, Empty};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Order {
@@ -47,5 +47,23 @@ impl<K: Eq + std::hash::Hash + Ord, V: Coalescible> Coalescible for Map<K, V> {
         // `b` contains `b - a`, i.e, additions. keep them all.
         joined.extend(other);
         joined
+    }
+}
+
+impl Coalescible for Dict {
+    fn coalesce(mut self, other: Self, order: Order) -> Self {
+        for (key, value) in other {
+            match self.get_mut(&key) {
+                Some(existing) => {
+                    let previous = std::mem::replace(existing, Empty::Unit.into());
+                    *existing = previous.coalesce(value, order);
+                }
+                None => {
+                    self.insert(key, value);
+                }
+            }
+        }
+
+        self
     }
 }

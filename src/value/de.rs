@@ -200,7 +200,7 @@ impl<'de: 'c, 'c, I: Interpreter> Deserializer<'de> for ConfiguredValueDe<'c, I>
     }
 }
 
-use std::collections::btree_map::Iter;
+use super::dict::Iter;
 
 pub trait MakeDeserializer<'v> {
     type Args: Copy;
@@ -225,7 +225,7 @@ impl<'v> MakeDeserializer<'v> for &'v Value {
 }
 
 pub struct MapDe<'v, 'f, D: MakeDeserializer<'f>> {
-    iter: Iter<'v, String, Value>,
+    iter: Iter<'v>,
     pair: Option<(&'v String, &'v Value)>,
     args: D::Args,
 }
@@ -454,8 +454,8 @@ impl Value {
         visitor: V
     ) -> Result<V::Value> {
         let mut map = Dict::new();
-        map.insert(Self::FIELDS[0].into(), de.value.tag().into());
-        map.insert(Self::FIELDS[1].into(), de.value.clone());
+        map.insert(Self::FIELDS[0], de.value.tag());
+        map.insert(Self::FIELDS[1], de.value.clone());
         visitor.visit_map(MapDe::<ConfiguredValueDe<I>>::new(&map, de.config))
     }
 }
@@ -537,13 +537,13 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let mut dict = Dict::new();
         let mut id: Option<Tag> = None;
         let mut raw_val: Option<RawValue> = None;
-        while let Some(key) = map.next_key()? {
+        while let Some(key) = map.next_key::<String>()? {
             if key == Value::FIELDS[0] {
                 id = Some(map.next_value()?);
             } else if key == Value::FIELDS[1] {
                 raw_val = Some(map.next_value()?);
             }  else {
-                dict.insert(key, map.next_value()?);
+                dict.insert(key, map.next_value::<Value>()?);
             }
         }
 

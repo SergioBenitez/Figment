@@ -25,6 +25,25 @@
 //! assert_eq!(map.get(&23), Some(&"twenty-three"));
 //!
 //! ```
+//!
+//! # `dict!` macro
+//!
+//! The `dict!` macro constructs a [`Dict`], converting keys to `String` and
+//! values to [`Value`] via `Into`:
+//!
+//! ```rust
+//! use figment::{Figment, providers::Serialized, util::dict};
+//!
+//! let config = Figment::from(Serialized::defaults(dict! {
+//!     "address" => "127.0.0.1",
+//!     "port" => 8000,
+//!     "tls" => dict! { "enabled" => true },
+//! }));
+//!
+//! assert_eq!(config.extract_inner::<u16>("port").unwrap(), 8000);
+//! assert!(config.extract_inner::<bool>("tls.enabled").unwrap());
+//! # assert!(dict!().is_empty());
+//! ```
 use std::fmt;
 use std::path::{Path, PathBuf, Component};
 
@@ -281,7 +300,7 @@ pub fn nest(key: impl KeyPath, value: Value) -> Value {
         match keys.next() {
             Some(k) if !k.as_ref().is_empty() => {
                 let mut dict = Dict::new();
-                dict.insert(k.as_ref().into(), value_from(keys, value));
+                dict.insert(k.as_ref(), value_from(keys, value));
                 dict.into()
             }
             Some(_) | None => value
@@ -293,7 +312,7 @@ pub fn nest(key: impl KeyPath, value: Value) -> Value {
 
 #[doc(hidden)]
 #[macro_export]
-/// This is a macro.
+/// This is the `map!` macro.
 macro_rules! map {
     ($($key:expr => $value:expr),* $(,)?) => ({
         let mut map = $crate::value::Map::new();
@@ -303,6 +322,20 @@ macro_rules! map {
 }
 
 pub use map;
+
+#[doc(hidden)]
+#[macro_export]
+/// This is the `dict!` macro.
+macro_rules! dict {
+    () => ($crate::value::Dict::new());
+    ($($key:expr => $value:expr),+ $(,)?) => ({
+        let mut dict = $crate::value::Dict::new();
+        $(dict.insert($key, $value);)+
+        dict
+    });
+}
+
+pub use dict;
 
 #[doc(hidden)]
 #[macro_export]

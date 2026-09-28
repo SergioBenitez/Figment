@@ -302,6 +302,9 @@
 //!
 //! [YAML Extended]: providers::YamlExtended::from_str()
 //!
+//! The `preserve_order` feature enables insertion-ordered dictionaries. Without
+//! it, dictionaries are ordered by key. See [`value::Dict`] for details.
+//!
 //! # Available Providers
 //!
 //! In addition to the four gated providers above, figment provides the

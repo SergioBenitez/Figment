@@ -74,6 +74,7 @@ if [ "$1" = "--core" ]; then
     json
     yaml
     test
+    preserve_order
   )
 
   echo ":: Building and testing core [no features]..."
@@ -86,4 +87,5 @@ if [ "$1" = "--core" ]; then
 else
   echo ":: Building and testing libraries..."
   $CARGO test --all-features --all $@
+  $CARGO test --no-default-features --features "test,toml,json,yaml" --all $@
 fi
