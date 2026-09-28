@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{Profile, Error, Metadata};
 use crate::value::{Tag, Map, Dict};
 
@@ -98,7 +100,7 @@ pub trait Provider {
     /// This is used internally! Please, please don't use this externally. If
     /// you have a good usecase for this, let me know!
     #[doc(hidden)]
-    fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> { None }
+    fn __metadata_map(&self) -> Option<&Map<Tag, Arc<Metadata>>> { None }
 }
 
 /// This is exactly `<T as Provider>`.
@@ -112,7 +114,7 @@ impl<T: Provider> Provider for &T {
     }
 
     #[doc(hidden)]
-    fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> {
+    fn __metadata_map(&self) -> Option<&Map<Tag, Arc<Metadata>>> {
         T::__metadata_map(self)
     }
 }

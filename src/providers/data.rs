@@ -252,7 +252,7 @@ impl<F: Format> Data<F> {
     ///     # assert_eq!(e.kind, Kind::FileNotFound("missing.toml".into()));
     ///     # assert!(!e.missing());
     ///     # assert_eq!(e.kind.to_string(), "required file `missing.toml` not found");
-    ///     # let source = e.metadata.as_ref().unwrap().source.as_ref().unwrap();
+    ///     # let source = e.origins()[0].metadata.source.as_ref().unwrap();
     ///     # assert_eq!(source.file_path(), Some(std::path::Path::new("missing.toml")));
     ///
     ///     // Set `required` to false to explicitly allow missing files.

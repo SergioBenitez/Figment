@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::num::{ParseFloatError, ParseIntError};
 use std::str::FromStr;
 
@@ -96,7 +96,7 @@ impl Value {
     /// assert_eq!(string, "hello");
     /// ```
     pub fn deserialize<'de, T: serde::Deserialize<'de>>(&self) -> Result<T, Error> {
-        T::deserialize(self)
+        T::deserialize(self).map_err(|e| e.at(self))
     }
 
     /// Looks up and returns the value at path `path`, where `path` is any type
@@ -141,16 +141,23 @@ impl Value {
     /// assert_eq!(pies.find("pies.1.name").unwrap().as_str(), Some("pumpkin"));
     /// ```
     pub fn find(self, path: impl KeyPath) -> Option<Value> {
-        let mut value = self;
+        self.lookup(path).ok()
+    }
+
+    pub(crate) fn lookup(mut self, path: impl KeyPath) -> Result<Value, Value> {
         for key in path.segments() {
-            value = match value {
-                Value::Dict(_, mut values) => values.remove(key.as_ref())?,
-                Value::Array(_, values) => values.into_iter().nth(key.as_ref().parse().ok()?)?,
-                _ => return None,
+            let next = match &mut self {
+                Value::Dict(_, values) => values.remove(key.as_ref()),
+                Value::Array(_, values) => key.as_ref().parse::<usize>().ok()
+                    .filter(|&i| i < values.len())
+                    .map(|i| values.swap_remove(i)),
+                _ => None,
             };
+
+            self = next.ok_or(self)?;
         }
 
-        Some(value)
+        Ok(self)
     }
 
     /// Exactly like [`Value::find()`] but does not consume `self`,
@@ -228,6 +235,26 @@ impl Value {
             Value::Array(tag, ..) => tag,
             Value::Empty(tag, ..) => tag,
         }
+    }
+
+    pub(crate) fn source_tags(&self) -> Vec<Tag> {
+        fn collect(value: &Value, seen: &mut HashSet<(u64, u8)>, tags: &mut Vec<Tag>) {
+            let recurse = |v| collect(v, seen, tags);
+            match value {
+                Value::Dict(_, dict) if !dict.is_empty() => dict.values().for_each(recurse),
+                Value::Array(_, values) if !values.is_empty() => values.iter().for_each(recurse),
+                _ => match value.tag() {
+                    tag if tag.is_default() => {},
+                    tag => if seen.insert((tag.metadata_id(), tag.profile_tag() as u8)) {
+                        tags.push(tag);
+                    }
+                },
+            }
+        }
+
+        let mut tags = Vec::new();
+        collect(self, &mut HashSet::new(), &mut tags);
+        tags
     }
 
     conversion_fn!(&Value, String => &str, as_str);

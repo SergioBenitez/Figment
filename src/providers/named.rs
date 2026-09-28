@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::{Metadata, Profile, Provider};
 use crate::value::{self, Dict, Map};
@@ -46,7 +47,7 @@ impl<T: Provider> Provider for Named<T> {
         self.provider.profile()
     }
 
-    fn __metadata_map(&self) -> Option<Map<value::Tag, Metadata>> {
+    fn __metadata_map(&self) -> Option<&Map<value::Tag, Arc<Metadata>>> {
         self.provider.__metadata_map()
     }
 }

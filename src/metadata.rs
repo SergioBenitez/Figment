@@ -26,10 +26,11 @@ use crate::Profile;
 ///
 /// ## Errors
 ///
-/// [`Error`]s produced by [`Figment`]s contain the `Metadata` for the value
-/// that caused the error. The `Display` implementation for `Error` uses the
-/// metadata's interpolater to display the path to the key for the value that
-/// caused the error.
+/// [`Error`]s produced by [`Figment`]s include the `Metadata` of each of their
+/// origins, available via [`Error::origins()`]. The `Display` implementation
+/// for `Error` uses the metadata's interpolater to display the path to the key
+/// for an individual value. For a dictionary or array, it displays the key path
+/// and lists the origins of its values.
 ///
 /// ## Interpolation
 ///
@@ -63,6 +64,7 @@ use crate::Profile;
 ///
 /// [`Provider`]: crate::Provider
 /// [`Error`]: crate::Error
+/// [`Error::origins()`]: crate::Error::origins()
 /// [`Figment`]: crate::Figment
 /// [`RelativePathBuf`]: crate::value::magic::RelativePathBuf
 /// [`value`]: crate::value::Value

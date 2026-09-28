@@ -1,4 +1,5 @@
 use std::panic::Location;
+use std::sync::Arc;
 
 use serde::de::Deserialize;
 
@@ -116,7 +117,7 @@ use crate::coalesce::{Coalescible, Order};
 #[derive(Clone, Debug)]
 pub struct Figment {
     pub(crate) profile: Profile,
-    pub(crate) metadata: Map<Tag, Metadata>,
+    pub(crate) metadata: Map<Tag, Arc<Metadata>>,
     pub(crate) value: Result<Map<Profile, Dict>>,
 }
 
@@ -158,7 +159,7 @@ impl Figment {
     #[track_caller]
     fn provide<T: Provider>(mut self, provider: T, order: Order) -> Self {
         if let Some(map) = provider.__metadata_map() {
-            self.metadata.extend(map);
+            self.metadata.extend(map.iter().map(|(&tag, md)| (tag, Arc::clone(md))));
         }
 
         if let Some(profile) = provider.profile() {
@@ -169,11 +170,11 @@ impl Figment {
         metadata.provide_location = Some(Location::caller());
 
         let tag = Tag::next();
-        self.metadata.insert(tag, metadata);
+        self.metadata.insert(tag, Arc::new(metadata));
         self.value = match (provider.data(), self.value) {
             (Ok(_), e@Err(_)) => e,
-            (Err(e), Ok(_)) => Err(e.retagged(tag)),
-            (Err(e), Err(prev)) => Err(e.retagged(tag).chain(prev)),
+            (Err(e), Ok(_)) => Err(e.provided_by(&self.metadata[&tag])),
+            (Err(e), Err(prev)) => Err(e.provided_by(&self.metadata[&tag]).chain(prev)),
             (Ok(mut new), Ok(old)) => {
                 new.iter_mut()
                     .flat_map(|(p, map)| std::iter::repeat(p).zip(map.values_mut()))
@@ -503,6 +504,7 @@ impl Figment {
     pub fn extract<'a, T: Deserialize<'a>>(&self) -> Result<T> {
         let value = self.merged()?;
         T::deserialize(ConfiguredValueDe::<'_, DefaultInterpreter>::from(self, &value))
+            .map_err(|e| e.at(&value).resolved(self))
     }
 
     /// As [`extract`](Figment::extract_lossy), but interpret numbers and
@@ -559,19 +561,21 @@ impl Figment {
     pub fn extract_lossy<'a, T: Deserialize<'a>>(&self) -> Result<T> {
         let value = self.merged()?;
         T::deserialize(ConfiguredValueDe::<'_, LossyInterpreter>::from(self, &value))
+            .map_err(|e| e.at(&value).resolved(self))
     }
 
     fn extract_inner_with<'a, T, I>(&self, path: impl KeyPath) -> Result<T>
         where T: Deserialize<'a>, I: Interpreter
     {
         let value = self.merged()?;
-        let value = match value.find(&path) {
-            Some(value) => value,
-            None => return T::deserialize(MissingFieldDeserializer(&path)),
+        let value = match value.lookup(&path) {
+            Ok(value) => value,
+            Err(value) => return T::deserialize(MissingFieldDeserializer(&path))
+                .map_err(|e| e.at(&value).prefixed(path).resolved(self)),
         };
 
         let de = ConfiguredValueDe::<'_, I>::from(self, &value);
-        T::deserialize(de).map_err(|e| e.with_path(path))
+        T::deserialize(de).map_err(|e| e.at(&value).prefixed(path).resolved(self))
     }
 
     /// Deserializes the value at the `key` path in the collected value into
@@ -669,7 +673,7 @@ impl Figment {
     // provided. It's important that the IDs are unique globally since we can
     // allow combining `Figment`s.
     pub fn metadata(&self) -> impl Iterator<Item = &Metadata> {
-        self.metadata.values()
+        self.metadata.values().map(|md| &**md)
     }
 
     /// Returns the selected profile.
@@ -776,8 +780,8 @@ impl Figment {
     /// ```
     pub fn find_value(&self, path: impl KeyPath) -> Result<Value> {
         self.merged()?
-            .find(&path)
-            .ok_or_else(|| Error::missing_field(&path))
+            .lookup(&path)
+            .map_err(|value| Error::missing_field(&path).at(&value).prefixed(path).resolved(self))
     }
 
     /// Returns `true` if the combined figment evaluates successfully and
@@ -852,7 +856,7 @@ impl Figment {
     /// });
     /// ```
     pub fn find_metadata(&self, key: impl KeyPath) -> Option<&Metadata> {
-        self.metadata.get(&self.find_value(key).ok()?.tag())
+        self.get_metadata(self.find_value(key).ok()?.tag())
     }
 
     /// Returns the metadata with the given `tag` if this figment contains a
@@ -885,21 +889,23 @@ impl Figment {
     /// });
     /// ```
     pub fn get_metadata(&self, tag: Tag) -> Option<&Metadata> {
-        self.metadata.get(&tag)
+        self.metadata.get(&tag).map(|md| &**md)
     }
 }
 
 impl Provider for Figment {
     fn metadata(&self) -> Metadata { Metadata::default() }
 
-    fn data(&self) -> Result<Map<Profile, Dict>> { self.value.clone() }
+    fn data(&self) -> Result<Map<Profile, Dict>> {
+        self.value.clone().map_err(|e| e.resolved(self))
+    }
 
     fn profile(&self) -> Option<Profile> {
         Some(self.profile.clone())
     }
 
-    fn __metadata_map(&self) -> Option<Map<Tag, Metadata>> {
-        Some(self.metadata.clone())
+    fn __metadata_map(&self) -> Option<&Map<Tag, Arc<Metadata>>> {
+        Some(&self.metadata)
     }
 }
 
