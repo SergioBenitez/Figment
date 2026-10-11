@@ -17,6 +17,8 @@ use crate::Profile;
 ///   * A default or custom [interpolater](#interpolation).
 ///   * A source [`Location`] where a value's provider was added to the
 ///     containing figment, if it is known.
+///   * Whether the value's provider emitted any values, if it has been queried
+///     for data.
 ///
 /// This information is used to produce insightful error messages as well as to
 /// generate values like [`RelativePathBuf`] that know about their configuration
@@ -79,6 +81,10 @@ pub struct Metadata {
     /// The source location where this value's provider was added to the
     /// containing figment, if it is known.
     pub provide_location: Option<&'static Location<'static>>,
+    /// Whether this value's provider emitted any values when queried for data.
+    /// This is `Some` once a `Figment` has queried the provider, which it does
+    /// when the provider is added to a `Figment`, but may be `None` beforehand.
+    pub emitted: Option<bool>,
     interpolater: Box<dyn Interpolator>,
 }
 
@@ -202,6 +208,7 @@ impl Default for Metadata {
             name: "Default".into(),
             source: None,
             provide_location: None,
+            emitted: None,
             interpolater: Box::new(default_interpolater),
         }
     }

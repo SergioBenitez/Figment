@@ -103,8 +103,9 @@ use crate::coalesce::{Coalescible, Order};
 ///
 /// Every value collected by a `Figment` is accompanied by the metadata produced
 /// by the value's provider. Additionally, [`Metadata::provide_location`] is set
-/// by `from`, `merge` and `join` to the caller's location. `Metadata` can be
-/// retrieved in one of several ways:
+/// by `from`, `merge` and `join` to the caller's location, and
+/// [`Metadata::emitted`] is set to whether the provider emitted any values.
+/// `Metadata` can be retrieved in one of several ways:
 ///
 ///   * [`Figment::metadata()`], which returns an iterator over all of the
 ///     metadata for all values.
@@ -166,12 +167,13 @@ impl Figment {
             self.profile = self.profile.coalesce(profile, order);
         }
 
-        let mut metadata = provider.metadata();
+        let (mut metadata, data) = (provider.metadata(), provider.data());
         metadata.provide_location = Some(Location::caller());
+        metadata.emitted = Some(matches!(&data, Ok(map) if map.values().any(|d| !d.is_empty())));
 
         let tag = Tag::next();
         self.metadata.insert(tag, Arc::new(metadata));
-        self.value = match (provider.data(), self.value) {
+        self.value = match (data, self.value) {
             (Ok(_), e@Err(_)) => e,
             (Err(e), Ok(_)) => Err(e.provided_by(&self.metadata[&tag])),
             (Err(e), Err(prev)) => Err(e.provided_by(&self.metadata[&tag]).chain(prev)),
@@ -646,8 +648,14 @@ impl Figment {
         self.extract_inner_with::<T, LossyInterpreter>(path)
     }
 
-    /// Returns an iterator over the metadata for all of the collected values in
-    /// the order in which they were added to `self`.
+    /// Returns an iterator over the metadata of each provider in `self`.
+    ///
+    /// One `Metadata` is returned for each provider added via
+    /// [`Figment::from()`], [`Figment::merge()`], [`Figment::join()`], and so
+    /// on, irrespective of whether the provider emitted values. For added
+    /// providers that are themselves `Figment`s, the metadata of _their_
+    /// providers are returned (effectively a _flat map_). Metadata is returned
+    /// in the order in which providers were added to _any_ `Figment`.
     ///
     /// # Example
     ///
@@ -669,9 +677,9 @@ impl Figment {
     /// ```
     // In fact, the order in which they were added globally. Why? Because
     // `BTreeMap` returns values in order of keys, and we generate a new ID,
-    // monotonically greater than the previous, each time a new item is
-    // provided. It's important that the IDs are unique globally since we can
-    // allow combining `Figment`s.
+    // strictly greater than the previous, each time a new item is provided.
+    // It's important that the IDs are globally unique since we allow combining
+    // `Figment`s.
     pub fn metadata(&self) -> impl Iterator<Item = &Metadata> {
         self.metadata.values().map(|md| &**md)
     }
@@ -926,7 +934,7 @@ fn is_send_sync() {
 mod tests {
     use super::*;
     use crate::error::Kind;
-    use crate::providers::Serialized;
+    use crate::providers::{Env, Named, Serialized};
     use crate::value::Empty;
 
     #[derive(Debug, PartialEq, serde::Deserialize)]
@@ -982,5 +990,44 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(error.kind, Kind::MissingField(ref key) if key == "provider"));
+    }
+
+    #[test]
+    fn metadata_records_whether_provider_emitted() {
+        struct Failing;
+
+        impl Provider for Failing {
+            fn metadata(&self) -> Metadata {
+                Metadata::named("failing")
+            }
+
+            fn data(&self) -> Result<Map<Profile, Dict>> {
+                Err("failed".into())
+            }
+        }
+
+        let figment = Figment::new()
+            .merge(Named::new("value", Serialized::default("key", 1)))
+            .merge(Named::new("empty", Serialized::defaults(Dict::new())))
+            .merge(Named::new("unset env", Env::prefixed("__FIGMENT_UNSET_PREFIX_")))
+            .merge(Named::new("failing", Failing))
+            .merge(Named::new("figment", Figment::from(Named::new("inner", ("key", 1)))))
+            .merge(Named::new("empty figment", Figment::new()));
+
+        let emitted: Vec<_> = figment.metadata()
+            .map(|md| (md.name.as_ref(), md.emitted.unwrap()))
+            .collect();
+
+        assert_eq!(emitted, [
+            ("value", true),
+            ("empty", false),
+            ("unset env", false),
+            ("failing", false),
+            ("inner", true),
+            ("figment", true),
+            ("empty figment", false),
+        ]);
+
+        assert_eq!(Failing.metadata().emitted, None);
     }
 }
